@@ -18,6 +18,7 @@
 
   <properties>
       <node.version>v6.9.1</node.version>
+      <npm.version>3.10.8</npm.version>
       <yarn.version>v0.24.6</yarn.version>
       <frontend-maven-plugin.version>1.4</frontend-maven-plugin.version>
       <environment>dev</environment>
@@ -48,7 +49,7 @@
         </configuration>
       </plugin>
 
-      <plugin>
+     <!-- <plugin>
         <groupId>com.github.eirslett</groupId>
         <artifactId>frontend-maven-plugin</artifactId>
         <version>${frontend-maven-plugin.version}</version>
@@ -71,8 +72,8 @@
             <configuration>
               <arguments>install</arguments>
             </configuration>
-          </execution>
-          <execution>
+          </execution> 
+          <execution> 
             <id>build</id>
             <goals>
               <goal>npm</goal>
@@ -81,9 +82,12 @@
               <arguments>run-script build</arguments>
             </configuration>
             <phase>generate-resources</phase>
-          </execution>
+          </execution> 
         </executions>
       </plugin>
+      -->
+
+
       <plugin>
         <artifactId>maven-resources-plugin</artifactId>
         <configuration>
