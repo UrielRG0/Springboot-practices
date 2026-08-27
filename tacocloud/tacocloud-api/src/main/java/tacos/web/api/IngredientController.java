@@ -51,7 +51,7 @@ public class IngredientController {
     repo.save(ingredient);
   }
 
-  @PostMapping
+  /*@PostMapping
   public Mono<ResponseEntity<Ingredient>> postIngredient(@RequestBody Mono<Ingredient> ingredient) {
     return ingredient
         .flatMap(repo::save)
@@ -60,7 +60,9 @@ public class IngredientController {
           headers.setLocation(URI.create("http://localhost:8080/ingredients/" + i.getId()));
           return new ResponseEntity<Ingredient>(i, headers, HttpStatus.CREATED);
         });
-  }
+  }*/
+
+        
 
   @DeleteMapping("/{id}")
   public void deleteIngredient(@PathVariable String id) {
