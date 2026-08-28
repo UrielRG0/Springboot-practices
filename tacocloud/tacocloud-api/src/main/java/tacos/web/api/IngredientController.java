@@ -42,14 +42,34 @@ public class IngredientController {
   public Mono<Ingredient> byId(@PathVariable String id) {
     return repo.findById(id);
   }
-
-  @PutMapping("/{id}")
+  
+  /*@PutMapping("/{id}")
   public void updateIngredient(@PathVariable String id, @RequestBody Ingredient ingredient) {
     if (!ingredient.getId().equals(id)) {
       throw new IllegalStateException("Given ingredient's ID doesn't match the ID in the path.");
     }
     repo.save(ingredient);
   }
+*/
+
+//New putMapping
+@PutMapping("/{id}")
+public Mono<ResponseEntity<Ingredient>> updateIngredient(@PathVariable String id, @RequestBody Ingredient ingredient){
+
+  if(!id.equals(ingredient.getId())){ //Check if the ID exist
+    return Mono.just(ResponseEntity.badRequest().build()); //if not exist i return a bad request response
+  }
+  
+  
+  //webFlux
+  return repo.findById(id).flatMap(ingredientExistence ->{
+    return repo.save(ingredient);
+  }).map(ingredientSaved ->{ return ResponseEntity.ok(ingredientSaved);
+  }).defaultIfEmpty(ResponseEntity.notFound().build());
+}
+
+
+
 
   /*@PostMapping
   public Mono<ResponseEntity<Ingredient>> postIngredient(@RequestBody Mono<Ingredient> ingredient) {
@@ -64,9 +84,16 @@ public class IngredientController {
 
         
 
-  @DeleteMapping("/{id}")
+  /*@DeleteMapping("/{id}")
   public void deleteIngredient(@PathVariable String id) {
     repo.deleteById(id);
+  }*/
+
+  @DeleteMapping("/{id}")
+  public Mono<ResponseEntity<Void>> deleteIngredient(@PathVariable String id){
+    return repo.findById(id).flatMap(ingredienteExistente -> {
+      return repo.deleteById(ingredienteExistente.getId()).then(Mono.just(ResponseEntity.noContent().<Void>build()));
+    }).defaultIfEmpty(ResponseEntity.notFound().build());
   }
 
 }
