@@ -88,12 +88,12 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-artemis</artifactId>
 		</dependency> -->
-
-		<!--Reactor test-->
+		
+		<!--Reactor Test-->
 		<dependency>
-    		<groupId>io.projectreactor</groupId>
-    		<artifactId>reactor-test</artifactId>
-    		<scope>test</scope>
+			<groupId>io.projectreactor</groupId>
+			<artifactId>reactor-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 
 	</dependencies>
