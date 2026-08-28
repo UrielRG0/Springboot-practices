@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,11 +16,14 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tacos.Ingredient;
 import tacos.data.IngredientRepository;
+
+import javax.validation.Valid;
 
 @RestController
 @RequestMapping(path="/api/ingredients", produces="application/json")
@@ -81,7 +85,13 @@ public Mono<ResponseEntity<Ingredient>> updateIngredient(@PathVariable String id
           return new ResponseEntity<Ingredient>(i, headers, HttpStatus.CREATED);
         });
   }*/
-
+  @PostMapping
+  public Mono<ResponseEntity<Ingredient>> postIngredient(@RequestBody Ingredient ingredient, ServerHttpRequest request){
+    return repo.save(ingredient).map(savedIngredient->{
+      URI location=UriComponentsBuilder.fromUri(request.getURI()).path("/{id}").buildAndExpand(savedIngredient.getId()).toUri();
+      return ResponseEntity.created(location).body(savedIngredient);
+    });
+  }
         
 
   /*@DeleteMapping("/{id}")
