@@ -3,10 +3,11 @@ package tacos.web.api;
 import java.net.URI;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
+//import org.springframework.http.HttpHeaders;
+//import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.server.ServerHttpRequest;
+//import org.springframework.http.server.ServerHttpRequest;
+//import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +24,9 @@ import reactor.core.publisher.Mono;
 import tacos.Ingredient;
 import tacos.data.IngredientRepository;
 
-import javax.validation.Valid;
+//import javax.validation.Valid;
+
+//import org.springframework.validation.BindingResult;
 
 @RestController
 @RequestMapping(path="/api/ingredients", produces="application/json")
@@ -86,9 +89,12 @@ public Mono<ResponseEntity<Ingredient>> updateIngredient(@PathVariable String id
         });
   }*/
   @PostMapping
-  public Mono<ResponseEntity<Ingredient>> postIngredient(@RequestBody Ingredient ingredient, ServerHttpRequest request){
-    return repo.save(ingredient).map(savedIngredient->{
-      URI location=UriComponentsBuilder.fromUri(request.getURI()).path("/{id}").buildAndExpand(savedIngredient.getId()).toUri();
+  public Mono<ResponseEntity<Ingredient>> postIngredient(@RequestBody Ingredient ingredient, UriComponentsBuilder ucb) {
+    if (ingredient.getId()==null || ingredient.getId().trim().isEmpty() ||ingredient.getName()==null || ingredient.getName().trim().isEmpty() ||ingredient.getType() == null) {
+        return Mono.just(ResponseEntity.badRequest().build());
+    }
+    return repo.save(ingredient).map(savedIngredient -> {
+      URI location = ucb.path("/api/ingredients/{id}").buildAndExpand(savedIngredient.getId()).toUri();      
       return ResponseEntity.created(location).body(savedIngredient);
     });
   }
