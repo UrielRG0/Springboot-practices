@@ -2,6 +2,7 @@ package tacos.web.api;
 
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -73,11 +74,11 @@ public class OrderApiController {
   }
 
   @PatchMapping(path="/{orderId}", consumes="application/json")
-  public Mono<TacoOrder> patchOrder(@PathVariable("orderId") String orderId,
-                          @RequestBody TacoOrder patch) {
+  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,
+                          @RequestBody whiteListOrderApiController patch) {
 
     return repo.findById(orderId)
-        .map(order -> {
+        .flatMap(order -> {
           if (patch.getDeliveryName() != null) {
             order.setDeliveryName(patch.getDeliveryName());
           }
@@ -91,9 +92,9 @@ public class OrderApiController {
             order.setDeliveryState(patch.getDeliveryState());
           }
           if (patch.getDeliveryZip() != null) {
-            order.setDeliveryZip(patch.getDeliveryState());
+            order.setDeliveryZip(patch.getDeliveryZip());
           }
-          if (patch.getCcNumber() != null) {
+          /*if (patch.getCcNumber() != null) {
             order.setCcNumber(patch.getCcNumber());
           }
           if (patch.getCcExpiration() != null) {
@@ -101,10 +102,11 @@ public class OrderApiController {
           }
           if (patch.getCcCVV() != null) {
             order.setCcCVV(patch.getCcCVV());
-          }
-          return order;
+          }*/
+          return repo.save(order);
         })
-        .flatMap(repo::save);
+        .map(savedOrder -> ResponseEntity.ok(savedOrder)) // 200 OK
+        .defaultIfEmpty(ResponseEntity.notFound().build()); //404 if doesnt find anything
   }
 
   @DeleteMapping("/{orderId}")
