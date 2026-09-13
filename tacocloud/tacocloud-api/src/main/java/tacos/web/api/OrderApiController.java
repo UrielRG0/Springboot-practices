@@ -68,9 +68,32 @@ public class OrderApiController {
         .flatMap(repo::save);
   }
 
+  //@PutMapping(path="/{orderId}", consumes="application/json")
+  //public Mono<TacoOrder> putOrder(@RequestBody Mono<TacoOrder> order) {
+  //  return order.flatMap(repo::save);
+  //}
+
   @PutMapping(path="/{orderId}", consumes="application/json")
-  public Mono<TacoOrder> putOrder(@RequestBody Mono<TacoOrder> order) {
-    return order.flatMap(repo::save);
+  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @RequestBody TacoOrder order){
+    if(order.getId()!= null && !orderId.equals(order.getId())){
+      return Mono.just(ResponseEntity.badRequest().build());
+    }
+
+    return repo.findById(orderId).flatMap(existingOrder ->{
+
+      existingOrder.setDeliveryName(order.getDeliveryName());
+      existingOrder.setDeliveryStreet(order.getDeliveryStreet());
+      existingOrder.setDeliveryCity(order.getDeliveryCity());
+      existingOrder.setDeliveryState(order.getDeliveryState());
+      existingOrder.setDeliveryZip(order.getDeliveryZip());
+
+      existingOrder.setTacos(order.getTacos());
+
+
+      return repo.save(existingOrder);
+    }).map(savedOrder->ResponseEntity.ok(savedOrder)) //200
+    .defaultIfEmpty(ResponseEntity.notFound().build()); //404
+
   }
 
   @PatchMapping(path="/{orderId}", consumes="application/json")
@@ -111,10 +134,10 @@ public class OrderApiController {
 
   @DeleteMapping("/{orderId}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void deleteOrder(@PathVariable("orderId") String orderId) {
-    try {
-      repo.deleteById(orderId);
-    } catch (EmptyResultDataAccessException e) {}
+  public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId) {
+    return repo.findById(orderId).flatMap(orderToDelete ->{
+      return repo.delete(orderToDelete).thenReturn(ResponseEntity.noContent().<Void>build()); //204 no content
+    }).defaultIfEmpty(ResponseEntity.notFound().build());
   }
 
 }
