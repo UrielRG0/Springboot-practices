@@ -21,6 +21,8 @@ import tacos.TacoOrder;
 import tacos.data.OrderRepository;
 import tacos.messaging.OrderMessagingService;
 
+import tacos.api.dto.OrderPatchRequest;
+
 @RestController
 @RequestMapping(path="/api/orders",
                 produces="application/json")
@@ -107,7 +109,7 @@ public class OrderApiController {
 
   @PatchMapping(path="/{orderId}", consumes="application/json")
   public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,
-                          @RequestBody whiteListOrderApiController patch) {
+                          @RequestBody OrderPatchRequest patch) {
 
     return repo.findById(orderId)
         .flatMap(order -> {
