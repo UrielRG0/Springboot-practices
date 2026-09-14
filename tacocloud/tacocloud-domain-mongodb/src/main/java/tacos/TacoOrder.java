@@ -37,6 +37,7 @@ public class TacoOrder implements Serializable {
 
   private String ccCVV;
 
+  private String status = "PLACED";
 
   private List<Taco> tacos = new ArrayList<>();
 
