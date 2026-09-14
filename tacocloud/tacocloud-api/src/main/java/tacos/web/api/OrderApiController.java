@@ -20,7 +20,7 @@ import reactor.core.publisher.Mono;
 import tacos.TacoOrder;
 import tacos.data.OrderRepository;
 import tacos.messaging.OrderMessagingService;
-
+import tacos.api.dto.OrderCreateRequest;
 import tacos.api.dto.OrderPatchRequest;
 
 @RestController
@@ -85,10 +85,7 @@ public class OrderApiController {
   //}
 
   @PutMapping(path="/{orderId}", consumes="application/json")
-  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @RequestBody TacoOrder order){
-    if(order.getId()!= null && !orderId.equals(order.getId())){
-      return Mono.just(ResponseEntity.badRequest().build());
-    }
+  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @RequestBody OrderCreateRequest order){
 
     return repo.findById(orderId).flatMap(existingOrder ->{
 
@@ -144,11 +141,13 @@ public class OrderApiController {
   }
 
   @DeleteMapping("/{orderId}")
-  @ResponseStatus(HttpStatus.NO_CONTENT)
   public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId) {
-    return repo.findById(orderId).flatMap(orderToDelete ->{
-      return repo.delete(orderToDelete).thenReturn(ResponseEntity.noContent().<Void>build()); //204 no content
-    }).defaultIfEmpty(ResponseEntity.notFound().build());
+    return repo.findById(orderId).flatMap(orderToDelete -> {
+      if (orderToDelete.getStatus() != null && orderToDelete.getStatus().equals("PREPARING")) {
+        return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).<Void>build());
+      }
+      return repo.delete(orderToDelete).thenReturn(ResponseEntity.noContent().<Void>build());
+    }).defaultIfEmpty(ResponseEntity.notFound().build()); // 404 si no existe
   }
 
 }
