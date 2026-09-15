@@ -23,6 +23,7 @@ import tacos.messaging.OrderMessagingService;
 import tacos.api.dto.OrderCreateRequest;
 import tacos.api.dto.OrderPatchRequest;
 
+import javax.validation.Valid;
 @RestController
 @RequestMapping(path="/api/orders",
                 produces="application/json")
@@ -56,7 +57,7 @@ public class OrderApiController {
 
   @PostMapping(consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
-  public Mono<TacoOrder> postOrder(@RequestBody TacoOrder order) {
+  public Mono<TacoOrder> postOrder(@Valid @RequestBody TacoOrder order) {
     orderMessages.sendOrder(order);
     return repo.save(order);
   }
@@ -85,7 +86,7 @@ public class OrderApiController {
   //}
 
   @PutMapping(path="/{orderId}", consumes="application/json")
-  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @RequestBody OrderCreateRequest order){
+  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @Valid @RequestBody OrderCreateRequest order){
 
     return repo.findById(orderId).flatMap(existingOrder ->{
 
@@ -105,8 +106,7 @@ public class OrderApiController {
   }
 
   @PatchMapping(path="/{orderId}", consumes="application/json")
-  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,
-                          @RequestBody OrderPatchRequest patch) {
+  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,@Valid @RequestBody OrderPatchRequest patch) {
 
     return repo.findById(orderId)
         .flatMap(order -> {
