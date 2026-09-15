@@ -5,9 +5,9 @@ import java.util.Collection;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.
-                                          SimpleGrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.data.mongodb.core.index.Indexed;
 
 import lombok.AccessLevel;
 import lombok.Data;
@@ -25,6 +25,7 @@ public class User implements UserDetails {
   @Id
   private String id;
   
+  @Indexed(unique = true)
   private final String username;
   
   private final String password;
@@ -34,6 +35,8 @@ public class User implements UserDetails {
   private final String state;
   private final String zip;
   private final String phoneNumber;
+
+  @Indexed(unique = true)
   private final String email;
   
   @Override
