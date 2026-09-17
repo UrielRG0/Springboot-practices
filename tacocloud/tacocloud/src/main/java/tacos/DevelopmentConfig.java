@@ -41,10 +41,10 @@ public class DevelopmentConfig {
         
         userRepo.save(new User("habuma", encoder.encode("password"), 
               "Craig Walls", "123 North Street", "Cross Roads", "TX", 
-              "76227", "123-123-1234", "craig@habuma.com"))
+              "76227", "123-123-1234", "craig@habuma.com", "ROLE_USER"))
           .subscribe(user -> {
-              paymentMethodRepo.save(new PaymentMethod(user, "4111111111111111", "321", "10/25")).subscribe();
-          });        
+              paymentMethodRepo.save(new PaymentMethod(user, "tok_fake_98765", "VISA", "1111")).subscribe();
+          });       
         
         Taco taco1 = new Taco();
         taco1.setId("TACO1");
