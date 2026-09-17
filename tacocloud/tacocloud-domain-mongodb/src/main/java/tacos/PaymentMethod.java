@@ -2,6 +2,7 @@ package tacos;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import lombok.AccessLevel;
 import lombok.Data;
@@ -18,8 +19,11 @@ public class PaymentMethod {
   private String id;
   
   private final User user;
-  private final String ccNumber;
-  private final String ccCVV;
-  private final String ccExpiration;
+
+  @JsonIgnore 
+  private final String paymentToken; 
+  
+  private final String brand;        
+  private final String last4;        
   
 }

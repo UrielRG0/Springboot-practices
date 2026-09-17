@@ -31,11 +31,13 @@ public class TacoOrder implements Serializable {
 
   private String deliveryZip;
 
-  private String ccNumber;
+  //private String ccNumber;
 
-  private String ccExpiration;
+  //private String ccExpiration;
 
-  private String ccCVV;
+  //private String ccCVV;
+
+  private PaymentMethod paymentMethod;
 
   private String status = "PLACED";
 

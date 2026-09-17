@@ -37,12 +37,16 @@ public class OrderApiController {
   private OrderMessagingService orderMessages;
   private EmailOrderService emailOrderService;
 
+  private PaymentGateway paymentGateway;
+
   public OrderApiController(OrderRepository repo,
                             OrderMessagingService orderMessages,
-                            EmailOrderService emailOrderService) {
+                            EmailOrderService emailOrderService,
+                            PaymentGateway paymentGateway) {
     this.repo = repo;
     this.orderMessages = orderMessages;
     this.emailOrderService = emailOrderService;
+    this.paymentGateway = paymentGateway;
   }
 
   @GetMapping(produces="application/json")
@@ -68,8 +72,10 @@ public class OrderApiController {
   public Mono<TacoOrder> postOrder(@Valid @RequestBody OrderCreateRequest request, @AuthenticationPrincipal User loggedUser) {
     TacoOrder order = tacos.api.dto.OrderMapper.toDomainOrder(request);
     order.setUser(loggedUser); 
-    orderMessages.sendOrder(order);
-    return repo.save(order);
+    return paymentGateway.tokenize(request.getPaymentToken(), loggedUser)
+      .flatMap(safePaymentMethod -> {order.setPaymentMethod(safePaymentMethod);orderMessages.sendOrder(order);  
+        return repo.save(order);
+      });
   }
 
   //@PostMapping(path="fromEmail", consumes="application/json")
