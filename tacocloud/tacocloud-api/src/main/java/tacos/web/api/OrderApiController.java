@@ -23,6 +23,9 @@ import tacos.messaging.OrderMessagingService;
 import tacos.api.dto.OrderCreateRequest;
 import tacos.api.dto.OrderPatchRequest;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import tacos.User;
+
 import javax.validation.Valid;
 @RestController
 @RequestMapping(path="/api/orders",
@@ -43,8 +46,13 @@ public class OrderApiController {
   }
 
   @GetMapping(produces="application/json")
-  public Flux<TacoOrder> allOrders() {
-    return repo.findAll();
+  public Flux<TacoOrder> allOrders(@AuthenticationPrincipal User loggedUser) {
+    boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+    if (isAdmin) {
+      return repo.findAll();
+    } else {
+      return repo.findAll().filter(order -> order.getUser() != null && order.getUser().getId().equals(loggedUser.getId()));
+    }
   }
 
 //  @PostMapping(consumes="application/json")
@@ -57,7 +65,9 @@ public class OrderApiController {
 
   @PostMapping(consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
-  public Mono<TacoOrder> postOrder(@Valid @RequestBody TacoOrder order) {
+  public Mono<TacoOrder> postOrder(@Valid @RequestBody OrderCreateRequest request, @AuthenticationPrincipal User loggedUser) {
+    TacoOrder order = tacos.api.dto.OrderMapper.toDomainOrder(request);
+    order.setUser(loggedUser); 
     orderMessages.sendOrder(order);
     return repo.save(order);
   }
@@ -86,68 +96,63 @@ public class OrderApiController {
   //}
 
   @PutMapping(path="/{orderId}", consumes="application/json")
-  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @Valid @RequestBody OrderCreateRequest order){
-
-    return repo.findById(orderId).flatMap(existingOrder ->{
+  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @Valid @RequestBody OrderCreateRequest order,
+      @AuthenticationPrincipal User loggedUser){return repo.findById(orderId).flatMap(existingOrder ->{
+      
+      boolean isOwner = existingOrder.getUser() != null && existingOrder.getUser().getId().equals(loggedUser.getId());
+      boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+      
+      if (!isOwner && !isAdmin) {
+        return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<TacoOrder>build());
+      }
 
       existingOrder.setDeliveryName(order.getDeliveryName());
       existingOrder.setDeliveryStreet(order.getDeliveryStreet());
       existingOrder.setDeliveryCity(order.getDeliveryCity());
       existingOrder.setDeliveryState(order.getDeliveryState());
       existingOrder.setDeliveryZip(order.getDeliveryZip());
-
       existingOrder.setTacos(order.getTacos());
-
-
-      return repo.save(existingOrder);
-    }).map(savedOrder->ResponseEntity.ok(savedOrder)) //200
-    .defaultIfEmpty(ResponseEntity.notFound().build()); //404
-
+      return repo.save(existingOrder).map(savedOrder -> ResponseEntity.ok(savedOrder));
+      
+    }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 
   @PatchMapping(path="/{orderId}", consumes="application/json")
-  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,@Valid @RequestBody OrderPatchRequest patch) {
+  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,@Valid @RequestBody OrderPatchRequest patch, @AuthenticationPrincipal User loggedUser) {
 
     return repo.findById(orderId)
-        .flatMap(order -> {
-          if (patch.getDeliveryName() != null) {
-            order.setDeliveryName(patch.getDeliveryName());
-          }
-          if (patch.getDeliveryStreet() != null) {
-            order.setDeliveryStreet(patch.getDeliveryStreet());
-          }
-          if (patch.getDeliveryCity() != null) {
-            order.setDeliveryCity(patch.getDeliveryCity());
-          }
-          if (patch.getDeliveryState() != null) {
-            order.setDeliveryState(patch.getDeliveryState());
-          }
-          if (patch.getDeliveryZip() != null) {
-            order.setDeliveryZip(patch.getDeliveryZip());
-          }
-          /*if (patch.getCcNumber() != null) {
-            order.setCcNumber(patch.getCcNumber());
-          }
-          if (patch.getCcExpiration() != null) {
-            order.setCcExpiration(patch.getCcExpiration());
-          }
-          if (patch.getCcCVV() != null) {
-            order.setCcCVV(patch.getCcCVV());
-          }*/
-          return repo.save(order);
-        })
-        .map(savedOrder -> ResponseEntity.ok(savedOrder)) // 200 OK
-        .defaultIfEmpty(ResponseEntity.notFound().build()); //404 if doesnt find anything
+      .flatMap(order -> {
+        boolean isOwner = order.getUser() != null && order.getUser().getId().equals(loggedUser.getId());
+        boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+        if (!isOwner && !isAdmin) {
+          return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<TacoOrder>build());
+        }
+        if (patch.getDeliveryName() != null) order.setDeliveryName(patch.getDeliveryName());
+        if (patch.getDeliveryStreet() != null) order.setDeliveryStreet(patch.getDeliveryStreet());
+        if (patch.getDeliveryCity() != null) order.setDeliveryCity(patch.getDeliveryCity());
+        if (patch.getDeliveryState() != null) order.setDeliveryState(patch.getDeliveryState());
+        if (patch.getDeliveryZip() != null) order.setDeliveryZip(patch.getDeliveryZip());
+        return repo.save(order).map(savedOrder -> ResponseEntity.ok(savedOrder));
+              
+      }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 
   @DeleteMapping("/{orderId}")
-  public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId) {
-    return repo.findById(orderId).flatMap(orderToDelete -> {
+  public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId, 
+                                                @AuthenticationPrincipal User loggedUser) {
+    
+    return repo.findById(orderId).flatMap(orderToDelete->{
+      boolean isOwner = orderToDelete.getUser() != null && orderToDelete.getUser().getId().equals(loggedUser.getId());
+      boolean isAdmin=loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+
+      if (!isOwner && !isAdmin) {
+        return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<Void>build());
+      }
       if (orderToDelete.getStatus() != null && orderToDelete.getStatus().equals("PREPARING")) {
         return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).<Void>build());
       }
       return repo.delete(orderToDelete).thenReturn(ResponseEntity.noContent().<Void>build());
-    }).defaultIfEmpty(ResponseEntity.notFound().build()); // 404 si no existe
+    }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 
 }
