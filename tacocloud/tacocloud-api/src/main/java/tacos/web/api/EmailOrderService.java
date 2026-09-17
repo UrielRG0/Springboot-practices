@@ -47,9 +47,9 @@ public class EmailOrderService {
             TacoOrder order = new TacoOrder();
 
             order.setUser(user);
-            order.setCcNumber(paymentMethod.getCcNumber());
-            order.setCcCVV(paymentMethod.getCcCVV());
-            order.setCcExpiration(paymentMethod.getCcExpiration());
+            //order.setCcNumber(paymentMethod.getCcNumber());
+            //order.setCcCVV(paymentMethod.getCcCVV());
+            //order.setCcExpiration(paymentMethod.getCcExpiration());
             order.setDeliveryName(user.getFullname());
             order.setDeliveryStreet(user.getStreet());
             order.setDeliveryCity(user.getCity());

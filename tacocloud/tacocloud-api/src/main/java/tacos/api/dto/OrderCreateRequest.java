@@ -30,7 +30,7 @@ public class OrderCreateRequest {
     @Size(min=5,max = 10, message = "Delivery zip must be less than 10 characters")
     private String deliveryZip;
 
-    @NotBlank (message = "Credit card number is required")
+    /*@NotBlank (message = "Credit card number is required")
     @Size(min=16,max = 16, message = "Credit card number must be 16 characters")
     private String ccNumber;
 
@@ -40,7 +40,10 @@ public class OrderCreateRequest {
 
     @NotBlank (message = "Credit card CVV is required")
     @Size(min=3,max = 3, message = "Credit card CVV must be 3 characters")
-    private String ccCVV;
+    private String ccCVV; */
+
+    @NotBlank(message = "The payment token is required")
+    private String paymentToken;
 
     @NotNull(message= "Tacos are required")
     @Size (min=1, message = "You must order at least 1 taco")
