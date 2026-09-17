@@ -38,10 +38,12 @@ public class User implements UserDetails {
 
   @Indexed(unique = true)
   private final String email;
+
+  private final String role;
   
   @Override
   public Collection<? extends GrantedAuthority> getAuthorities() {
-    return Arrays.asList(new SimpleGrantedAuthority("ROLE_USER"));
+    return Arrays.asList(new SimpleGrantedAuthority(this.role != null ? this.role : "ROLE_USER"));
   }
 
   @Override

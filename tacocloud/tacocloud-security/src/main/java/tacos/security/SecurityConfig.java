@@ -26,38 +26,23 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
   
   @Override
   protected void configure(HttpSecurity http) throws Exception {
-    http
-      .authorizeRequests()
-        .antMatchers(HttpMethod.OPTIONS).permitAll() // needed for Angular/CORS
-        .antMatchers(HttpMethod.POST, "/api/ingredients").permitAll()
-        .antMatchers("/api/tacos/**", "/api/orders/**")
-            .permitAll()
-            //.access("hasRole('ROLE_USER')")
-        .antMatchers(HttpMethod.PATCH, "/api/ingredients").permitAll()
-        .antMatchers("/**").access("permitAll")
+    http.csrf().ignoringAntMatchers("/api/**", "/register").and().cors() .and().authorizeRequests().antMatchers(HttpMethod.GET, "/api/ingredients").permitAll()
+        .antMatchers("/register", "/login").permitAll().
+        
+        antMatchers("/actuator/health").permitAll().antMatchers(HttpMethod.POST, "/api/ingredients").hasRole("ADMIN")
+        .antMatchers(HttpMethod.PATCH, "/api/ingredients").hasRole("ADMIN").antMatchers(HttpMethod.DELETE, "/api/ingredients").hasRole("ADMIN")
+        .antMatchers("/actuator/**").hasRole("ADMIN")
+
+        .antMatchers("/api/kitchen/**").hasRole("KITCHEN")
+
+        .antMatchers("/api/orders/**").hasAnyRole("USER", "ADMIN")
+
+        .antMatchers("/data-api/**").denyAll()
+
+        .anyRequest().authenticated()
         
       .and()
-        .formLogin()
-          .loginPage("/login")
-          
-      .and()
-        .httpBasic()
-          .realmName("Taco Cloud")
-          
-      .and()
-        .logout()
-          .logoutSuccessUrl("/")
-          
-      .and()
-        .csrf()
-          .ignoringAntMatchers("/h2-console/**", "/api/**")
-
-      // Allow pages to be loaded in frames from the same origin; needed for H2-Console
-      .and()  
-        .headers()
-          .frameOptions()
-            .sameOrigin()
-      ;
+        .httpBasic(); 
   }
 
   @Bean
