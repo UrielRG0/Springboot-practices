@@ -1,7 +1,7 @@
 package tacos;
 
 import java.io.Serializable;
-import java.math.BigDecimal; // <-- Importante para el dinero
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -27,6 +27,9 @@ public class TacoOrder implements Serializable {
   private String deliveryCity;
   private String deliveryState;
   private String deliveryZip;
+
+  private String discountCode;
+  private BigDecimal discountAmount = BigDecimal.ZERO;
 
   private PaymentMethod paymentMethod;
 
