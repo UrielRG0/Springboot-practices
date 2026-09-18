@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Component;
 
 import lombok.Data;
@@ -23,7 +24,11 @@ public class DiscountCodeProps {
         private BigDecimal value;
         private BigDecimal minPurchase = BigDecimal.ZERO;
         private BigDecimal maxDiscount;
+
+        @DateTimeFormat(pattern = "yyyy-MM-dd")
         private LocalDate startDate;
+
+        @DateTimeFormat(pattern = "yyyy-MM-dd")
         private LocalDate endDate;
     }
 }

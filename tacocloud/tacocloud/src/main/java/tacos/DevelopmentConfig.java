@@ -45,7 +45,7 @@ public class DevelopmentConfig {
               "76227", "123-123-1234", "craig@habuma.com", "ROLE_ADMIN")).block();
           
         if (miUsuario != null) {
-            paymentMethodRepo.save(new PaymentMethod(miUsuario, "tok_fake_98765", "VISA", "1111")).block();
+            paymentMethodRepo.save(new PaymentMethod(null, miUsuario, "tok_fake_98765", "VISA", "1111")).block();
         }       
         
         Taco taco1 = new Taco();

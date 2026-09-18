@@ -4,26 +4,25 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-import lombok.AccessLevel;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 
 @Document
 @Data
-@NoArgsConstructor(force=true, access=AccessLevel.PRIVATE)
-@RequiredArgsConstructor
+@NoArgsConstructor(force=true) 
+@AllArgsConstructor 
 public class PaymentMethod {
 
   @Id
   private String id;
   
-  private final User user;
+  private User user; 
 
   @JsonIgnore 
-  private final String paymentToken; 
+  private String paymentToken; 
   
-  private final String brand;        
-  private final String last4;        
+  private String brand; 
+  private String last4;  
   
 }

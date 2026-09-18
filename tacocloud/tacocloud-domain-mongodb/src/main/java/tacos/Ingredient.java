@@ -6,25 +6,24 @@ import javax.validation.constraints.Min;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.mapping.Document;
-import lombok.AccessLevel;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
+import java.util.HashSet;
+import java.util.Set;
 
 @Data
 @Document
-@NoArgsConstructor(access=AccessLevel.PRIVATE, force=true)
-@RequiredArgsConstructor
+@NoArgsConstructor 
 public class Ingredient {
 
   @Id
-  private final String id;
-  private final String name;
-  private final Type type;
-  private java.util.Set<DietaryTag> dietaryTags = new java.util.HashSet<>();
-  private java.util.Set<Allergen> allergens = new java.util.HashSet<>();
+  private String id;   
+  private String name;
+  private Type type;   
+  
+  private Set<DietaryTag> dietaryTags = new HashSet<>();
+  private Set<Allergen> allergens = new HashSet<>();
   private int spiceLevel = 0; 
-
 
   public enum Type {
     WRAP, PROTEIN, VEGGIES, CHEESE, SAUCE
@@ -43,4 +42,10 @@ public class Ingredient {
 
   @Version
   private Long version;
+
+  public Ingredient(String id, String name, Type type) {
+      this.id = id;
+      this.name = name;
+      this.type = type;
+  }
 }

@@ -44,6 +44,9 @@ public class OrderApiController {
 
   @GetMapping(produces="application/json")
   public Flux<TacoOrder> allOrders(@AuthenticationPrincipal User loggedUser) {
+    // Protección contra NPE si loggedUser es nulo
+    if (loggedUser == null) return Flux.empty(); 
+    
     boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
     if (isAdmin) {
       return repo.findAll();
@@ -56,7 +59,11 @@ public class OrderApiController {
   @ResponseStatus(HttpStatus.CREATED)
   public Mono<TacoOrder> postOrder(@Valid @RequestBody OrderCreateRequest request, @AuthenticationPrincipal User loggedUser) {
     TacoOrder order = tacos.api.dto.OrderMapper.toDomainOrder(request);
-    order.setUser(loggedUser); 
+    
+    // 1. Blindaje contra usuario nulo
+    if (loggedUser != null) {
+        order.setUser(loggedUser); 
+    }
     
     return paymentGateway.tokenize(request.getPaymentToken(), loggedUser)
       .flatMap(safePaymentMethod -> {
@@ -66,15 +73,25 @@ public class OrderApiController {
       .flatMap(pricedOrder -> 
           inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder)
       )
-      .flatMap(pricedOrder -> {
-          orderMessages.sendOrder(pricedOrder);  
-          return repo.save(pricedOrder);
+      // 2. PRIMERO guardamos en BD para asegurar la transacción...
+      .flatMap(pricedOrder -> repo.save(pricedOrder))
+      // 3. LUEGO mandamos el evento en un try-catch que no rompa el flujo si Kafka/Artemis están apagados
+      .doOnNext(savedOrder -> {
+          try {
+              orderMessages.sendOrder(savedOrder);  
+          } catch (Exception ex) {
+              System.err.println("Advertencia: No se pudo enviar el evento al broker. " + ex.getMessage());
+          }
       })
       .onErrorResume(e -> {
+          // 4. Mapeo explícito de errores para evitar que Spring lance un 500 genérico
           if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
               return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
           }
-          return Mono.error(e);
+          if (e instanceof IllegalArgumentException || e instanceof IllegalStateException) {
+              return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
+          }
+          return Mono.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno: " + e.getMessage()));
       });
   }
 
@@ -85,10 +102,19 @@ public class OrderApiController {
       .flatMap(order -> pricingService.calculatePrices(order))
       .flatMap(pricedOrder -> inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder))
       .flatMap(pricedOrder -> repo.save(pricedOrder))
-      .doOnNext(savedOrder -> orderMessages.sendOrder(savedOrder))
+      .doOnNext(savedOrder -> {
+          try {
+              orderMessages.sendOrder(savedOrder);
+          } catch (Exception ex) {
+              System.err.println("Advertencia: No se pudo enviar el evento al broker (Email). " + ex.getMessage());
+          }
+      })
       .onErrorResume(e -> {
           if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
               return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
+          }
+          if (e instanceof IllegalArgumentException) {
+              return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
           }
           return Mono.error(e);
       });
@@ -99,8 +125,8 @@ public class OrderApiController {
       @AuthenticationPrincipal User loggedUser){
     return repo.findById(orderId).flatMap(existingOrder ->{
       
-      boolean isOwner = existingOrder.getUser() != null && existingOrder.getUser().getId().equals(loggedUser.getId());
-      boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+      boolean isOwner = existingOrder.getUser() != null && loggedUser != null && existingOrder.getUser().getId().equals(loggedUser.getId());
+      boolean isAdmin = loggedUser != null && loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
       
       if (!isOwner && !isAdmin) {
         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<TacoOrder>build());
@@ -124,8 +150,8 @@ public class OrderApiController {
   public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,@Valid @RequestBody OrderPatchRequest patch, @AuthenticationPrincipal User loggedUser) {
     return repo.findById(orderId)
       .flatMap(order -> {
-        boolean isOwner = order.getUser() != null && order.getUser().getId().equals(loggedUser.getId());
-        boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+        boolean isOwner = order.getUser() != null && loggedUser != null && order.getUser().getId().equals(loggedUser.getId());
+        boolean isAdmin = loggedUser != null && loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
         if (!isOwner && !isAdmin) {
           return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<TacoOrder>build());
         }
@@ -143,8 +169,8 @@ public class OrderApiController {
   public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId, 
                                                 @AuthenticationPrincipal User loggedUser) {
     return repo.findById(orderId).flatMap(orderToDelete -> {
-      boolean isOwner = orderToDelete.getUser() != null && orderToDelete.getUser().getId().equals(loggedUser.getId());
-      boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+      boolean isOwner = orderToDelete.getUser() != null && loggedUser != null && orderToDelete.getUser().getId().equals(loggedUser.getId());
+      boolean isAdmin = loggedUser != null && loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
 
       if (!isOwner && !isAdmin) {
         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<Void>build());

@@ -10,7 +10,7 @@ public class FakePaymentGateway implements PaymentGateway {
 
     @Override
     public Mono<PaymentMethod> tokenize(String paymentToken, User user) {
-        PaymentMethod safeMethod = new PaymentMethod(user, paymentToken, "VISA", "4242");
+        PaymentMethod safeMethod = new PaymentMethod(null, user, paymentToken, "VISA", "4242");
         
         return Mono.just(safeMethod);
     }
