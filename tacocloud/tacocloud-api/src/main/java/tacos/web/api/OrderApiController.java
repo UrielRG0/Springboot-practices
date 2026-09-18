@@ -3,9 +3,11 @@ package tacos.web.api;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tacos.TacoOrder;
+import tacos.InventoryService;
 import tacos.data.OrderRepository;
 import tacos.messaging.OrderMessagingService;
 import tacos.api.dto.OrderCreateRequest;
@@ -13,8 +15,6 @@ import tacos.api.dto.OrderPatchRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import tacos.User;
 import javax.validation.Valid;
-
-import tacos.OrderItem;
 
 @RestController
 @RequestMapping(path="/api/orders", produces="application/json")
@@ -25,19 +25,21 @@ public class OrderApiController {
   private OrderMessagingService orderMessages;
   private EmailOrderService emailOrderService;
   private PaymentGateway paymentGateway;
-  
   private OrderPricingService pricingService;
+  private InventoryService inventoryService;
 
   public OrderApiController(OrderRepository repo,
                             OrderMessagingService orderMessages,
                             EmailOrderService emailOrderService,
                             PaymentGateway paymentGateway,
-                            OrderPricingService pricingService) { 
+                            OrderPricingService pricingService,
+                            InventoryService inventoryService) { 
     this.repo = repo;
     this.orderMessages = orderMessages;
     this.emailOrderService = emailOrderService;
     this.paymentGateway = paymentGateway;
     this.pricingService = pricingService;
+    this.inventoryService = inventoryService;
   }
 
   @GetMapping(produces="application/json")
@@ -61,9 +63,18 @@ public class OrderApiController {
           order.setPaymentMethod(safePaymentMethod);
           return pricingService.calculatePrices(order); 
       })
+      .flatMap(pricedOrder -> 
+          inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder)
+      )
       .flatMap(pricedOrder -> {
           orderMessages.sendOrder(pricedOrder);  
           return repo.save(pricedOrder);
+      })
+      .onErrorResume(e -> {
+          if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
+              return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
+          }
+          return Mono.error(e);
       });
   }
 
@@ -71,9 +82,16 @@ public class OrderApiController {
   @ResponseStatus(HttpStatus.CREATED)
   public Mono<TacoOrder> postOrderFromEmail(@RequestBody Mono<EmailOrder> emailOrder){
     return emailOrderService.convertEmailOrderToDomainOrder(emailOrder)
-      .flatMap(order -> pricingService.calculatePrices(order)) 
+      .flatMap(order -> pricingService.calculatePrices(order))
+      .flatMap(pricedOrder -> inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder))
       .flatMap(pricedOrder -> repo.save(pricedOrder))
-      .doOnNext(savedOrder -> orderMessages.sendOrder(savedOrder));
+      .doOnNext(savedOrder -> orderMessages.sendOrder(savedOrder))
+      .onErrorResume(e -> {
+          if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
+              return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
+          }
+          return Mono.error(e);
+      });
   }
 
   @PutMapping(path="/{orderId}", consumes="application/json")
@@ -93,8 +111,8 @@ public class OrderApiController {
       existingOrder.setDeliveryCity(orderDto.getDeliveryCity());
       existingOrder.setDeliveryState(orderDto.getDeliveryState());
       existingOrder.setDeliveryZip(orderDto.getDeliveryZip());
-      
       existingOrder.setItems(orderDto.getItems()); 
+
       return pricingService.calculatePrices(existingOrder)
         .flatMap(pricedOrder -> repo.save(pricedOrder))
         .map(savedOrder -> ResponseEntity.ok(savedOrder));
@@ -103,7 +121,7 @@ public class OrderApiController {
   }
 
   @PatchMapping(path="/{orderId}", consumes="application/json")
-  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId, @Valid @RequestBody OrderPatchRequest patch, @AuthenticationPrincipal User loggedUser) {
+  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,@Valid @RequestBody OrderPatchRequest patch, @AuthenticationPrincipal User loggedUser) {
     return repo.findById(orderId)
       .flatMap(order -> {
         boolean isOwner = order.getUser() != null && order.getUser().getId().equals(loggedUser.getId());
@@ -124,9 +142,9 @@ public class OrderApiController {
   @DeleteMapping("/{orderId}")
   public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId, 
                                                 @AuthenticationPrincipal User loggedUser) {
-    return repo.findById(orderId).flatMap(orderToDelete->{
+    return repo.findById(orderId).flatMap(orderToDelete -> {
       boolean isOwner = orderToDelete.getUser() != null && orderToDelete.getUser().getId().equals(loggedUser.getId());
-      boolean isAdmin=loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+      boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
 
       if (!isOwner && !isAdmin) {
         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<Void>build());
@@ -134,7 +152,10 @@ public class OrderApiController {
       if (orderToDelete.getStatus() != null && orderToDelete.getStatus().equals("PREPARING")) {
         return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).<Void>build());
       }
-      return repo.delete(orderToDelete).thenReturn(ResponseEntity.noContent().<Void>build());
+      return inventoryService.releaseInventory(orderToDelete)
+          .then(repo.delete(orderToDelete))
+          .thenReturn(ResponseEntity.noContent().<Void>build());
+          
     }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 }
