@@ -58,7 +58,7 @@ public class TacoClassificationService {
         private Set<DietaryTag> dietaryTags;
         private Set<Allergen> allergens;
         private int spiceLevel;
-        private String academicDisclaimer = "AVISO: Metadata generada con fines académicos. No sustituye controles reales de contaminación cruzada en cocina.";
+        private String academicDisclaimer = "Caution: This classification is based on the ingredients provided and may not account for cross-contamination or other factors. Always check with the restaurant for specific dietary needs.";
 
         public TacoClassification(Set<DietaryTag> dietaryTags, Set<Allergen> allergens, int spiceLevel) {
             this.dietaryTags = dietaryTags;
