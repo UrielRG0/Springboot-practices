@@ -21,6 +21,10 @@ public class Ingredient {
   private final String id;
   private final String name;
   private final Type type;
+  private java.util.Set<DietaryTag> dietaryTags = new java.util.HashSet<>();
+  private java.util.Set<Allergen> allergens = new java.util.HashSet<>();
+  private int spiceLevel = 0; 
+
 
   public enum Type {
     WRAP, PROTEIN, VEGGIES, CHEESE, SAUCE
