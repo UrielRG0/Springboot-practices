@@ -38,13 +38,14 @@ public class DevelopmentConfig {
         Ingredient sourCream = saveAnIngredient("SRCR", "Sour Cream", Type.SAUCE);
         
 //        UserUDT u = new UserUDT(username, fullname, phoneNumber)
-        
-        userRepo.save(new User("habuma", encoder.encode("password"), 
+        userRepo.deleteAll().block();
+        User miUsuario = userRepo.save(new User("habuma", encoder.encode("password"), 
               "Craig Walls", "123 North Street", "Cross Roads", "TX", 
-              "76227", "123-123-1234", "craig@habuma.com", "ROLE_USER"))
-          .subscribe(user -> {
-              paymentMethodRepo.save(new PaymentMethod(user, "tok_fake_98765", "VISA", "1111")).subscribe();
-          });       
+              "76227", "123-123-1234", "craig@habuma.com", "ROLE_ADMIN")).block();
+          
+        if (miUsuario != null) {
+            paymentMethodRepo.save(new PaymentMethod(miUsuario, "tok_fake_98765", "VISA", "1111")).block();
+        }       
         
         Taco taco1 = new Taco();
         taco1.setId("TACO1");

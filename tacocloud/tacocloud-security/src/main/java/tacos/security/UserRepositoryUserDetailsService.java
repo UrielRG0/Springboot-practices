@@ -1,18 +1,17 @@
 package tacos.security;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.
-                                              UserDetailsService;
-import org.springframework.security.core.userdetails.
-                                       UsernameNotFoundException;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import reactor.core.scheduler.Schedulers;
 
 import tacos.User;
 import tacos.data.UserRepository;
 
 @Service
-public class UserRepositoryUserDetailsService 
-        implements UserDetailsService {
+public class UserRepositoryUserDetailsService implements UserDetailsService {
 
   private UserRepository userRepo;
 
@@ -22,16 +21,15 @@ public class UserRepositoryUserDetailsService
   }
   
   @Override
-  public UserDetails loadUserByUsername(String username)
-      throws UsernameNotFoundException {
-
-    // TODO: Replace with reactive equivalent instead of blocking
-    User user = userRepo.findByUsername(username).block();
+  public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    User user = userRepo.findByUsername(username)
+                        .publishOn(Schedulers.boundedElastic()) 
+                        .block();
+    
     if (user != null) {
       return user;
     }
-    throw new UsernameNotFoundException(
-                    "User '" + username + "' not found");
+    
+    throw new UsernameNotFoundException("User '" + username + "' not found");
   }
-
 }
