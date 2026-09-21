@@ -3,6 +3,7 @@ package tacos.web.api;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,16 +23,20 @@ import tacos.Taco;
 import tacos.TacoSearchCriteria;
 import tacos.data.TacoRepository;
 
+import tacos.data.FavoriteRepository;
+
 @RestController
 @RequestMapping(path = "/api/tacos", produces = "application/json")
 @CrossOrigin(origins="http://localhost:8080")
 public class TacoController {
 
+  private final FavoriteRepository favoriteRepo;
+  
   private final TacoRepository tacoRepo;
-  public TacoController(TacoRepository tacoRepo) {
+  public TacoController(TacoRepository tacoRepo, FavoriteRepository favoriteRepo) {
     this.tacoRepo = tacoRepo;
+    this.favoriteRepo = favoriteRepo;
   }
-
   @GetMapping
   public Mono<ResponseEntity<Map<String, Object>>> searchTacos(@Valid @ModelAttribute TacoSearchCriteria criteria) {
       
@@ -62,6 +67,15 @@ public class TacoController {
   @GetMapping("/{id}")
   public Mono<Taco> tacoById(@PathVariable("id") String id) {
     return tacoRepo.findById(id);
+  }
+
+  @DeleteMapping("/{id}")
+  public Mono<ResponseEntity<Void>> deleteTaco(@PathVariable("id") String id) {
+      return tacoRepo.findById(id)
+          .flatMap(tacoExistente -> 
+              favoriteRepo.deleteByTacoId(id).then(tacoRepo.deleteById(id)).then(Mono.just(ResponseEntity.noContent().<Void>build()))
+          )
+          .defaultIfEmpty(ResponseEntity.notFound().build());
   }
 
 }

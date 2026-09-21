@@ -16,8 +16,8 @@ import reactor.core.publisher.Mono;
 import tacos.Ingredient;
 import tacos.Ingredient.Type;
 import tacos.Taco;
+import tacos.data.FavoriteRepository; 
 import tacos.data.TacoRepository;
-// Se elimina el import de TacoSearchRepository porque ya no existe
 
 public class TacoControllerTest {
 
@@ -29,19 +29,18 @@ public class TacoControllerTest {
         testTaco(5L), testTaco(6L),
         testTaco(7L), testTaco(8L),
         testTaco(9L), testTaco(10L),
-        testTaco(11L), testTaco(12L) // Mockeamos 12 tacos para la prueba
+        testTaco(11L), testTaco(12L) 
     };
     Flux<Taco> tacoFlux = Flux.just(tacos);
 
     TacoRepository tacoRepo = Mockito.mock(TacoRepository.class);
+    FavoriteRepository favRepo = Mockito.mock(FavoriteRepository.class); 
     
-    // Ahora mockeamos los métodos custom de búsqueda y conteo en lugar de findAll()
     when(tacoRepo.searchTacos(any())).thenReturn(tacoFlux);
     when(tacoRepo.countTacos(any())).thenReturn(Mono.just(12L));
 
-    // Solo le inyectamos el tacoRepo al controlador
     WebTestClient testClient = WebTestClient.bindToController(
-        new TacoController(tacoRepo))
+        new TacoController(tacoRepo, favRepo))
         .build();
 
     testClient.get().uri("/api/tacos?recent").exchange().expectStatus().isOk().expectBody().jsonPath("$.content").isArray().jsonPath("$.content").isNotEmpty()
@@ -53,6 +52,7 @@ public class TacoControllerTest {
   @Test
   public void shouldSaveATaco() {
     TacoRepository tacoRepo = Mockito.mock(TacoRepository.class);
+    FavoriteRepository favRepo = Mockito.mock(FavoriteRepository.class);
     
     Mono<Taco> unsavedTacoMono = Mono.just(testTaco(null));
     Taco savedTaco = testTaco(null);
@@ -60,7 +60,7 @@ public class TacoControllerTest {
 
     when(tacoRepo.save(any())).thenReturn(savedTacoMono);
     WebTestClient testClient = WebTestClient.bindToController(
-        new TacoController(tacoRepo)).build(); 
+        new TacoController(tacoRepo, favRepo)).build(); 
 
     testClient.post()
         .uri("/api/tacos")
@@ -77,10 +77,8 @@ public class TacoControllerTest {
     taco.setId(number != null ? number.toString(): "TESTID");
     taco.setName("Taco " + number);
     List<Ingredient> ingredients = new ArrayList<>();
-    ingredients.add(
-        new Ingredient("INGA", "Ingredient A", Type.WRAP));
-    ingredients.add(
-        new Ingredient("INGB", "Ingredient B", Type.PROTEIN));
+    ingredients.add(new Ingredient("INGA", "Ingredient A", Type.WRAP));
+    ingredients.add(new Ingredient("INGB", "Ingredient B", Type.PROTEIN));
     taco.setIngredients(ingredients);
     return taco;
   }
