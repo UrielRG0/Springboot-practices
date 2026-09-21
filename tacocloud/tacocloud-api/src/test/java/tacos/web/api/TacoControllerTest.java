@@ -17,7 +17,7 @@ import tacos.Ingredient;
 import tacos.Ingredient.Type;
 import tacos.Taco;
 import tacos.data.TacoRepository;
-import tacos.data.TacoSearchRepository;
+// Se elimina el import de TacoSearchRepository porque ya no existe
 
 public class TacoControllerTest {
 
@@ -29,47 +29,38 @@ public class TacoControllerTest {
         testTaco(5L), testTaco(6L),
         testTaco(7L), testTaco(8L),
         testTaco(9L), testTaco(10L),
-        testTaco(11L), testTaco(12L),
-        testTaco(13L), testTaco(14L),
-        testTaco(15L), testTaco(16L)};
+        testTaco(11L), testTaco(12L) // Mockeamos 12 tacos para la prueba
+    };
     Flux<Taco> tacoFlux = Flux.just(tacos);
 
     TacoRepository tacoRepo = Mockito.mock(TacoRepository.class);
-    TacoSearchRepository tacoSearchRepo = Mockito.mock(TacoSearchRepository.class);
-    when(tacoRepo.findAll()).thenReturn(tacoFlux);
+    
+    // Ahora mockeamos los métodos custom de búsqueda y conteo en lugar de findAll()
+    when(tacoRepo.searchTacos(any())).thenReturn(tacoFlux);
+    when(tacoRepo.countTacos(any())).thenReturn(Mono.just(12L));
 
+    // Solo le inyectamos el tacoRepo al controlador
     WebTestClient testClient = WebTestClient.bindToController(
-        new TacoController(tacoRepo, tacoSearchRepo))
+        new TacoController(tacoRepo))
         .build();
 
-    testClient.get().uri("/api/tacos?recent")
-      .exchange()
-      .expectStatus().isOk()
-      .expectBody()
-        .jsonPath("$").isArray()
-        .jsonPath("$").isNotEmpty()
-        .jsonPath("$[0].id").isEqualTo(tacos[0].getId().toString())
-        .jsonPath("$[0].name").isEqualTo("Taco 1")
-        .jsonPath("$[1].id").isEqualTo(tacos[1].getId().toString())
-        .jsonPath("$[1].name").isEqualTo("Taco 2")
-        .jsonPath("$[11].id").isEqualTo(tacos[11].getId().toString())
-        .jsonPath("$[11].name").isEqualTo("Taco 12")
-        .jsonPath("$[12]").doesNotExist();
+    testClient.get().uri("/api/tacos?recent").exchange().expectStatus().isOk().expectBody().jsonPath("$.content").isArray().jsonPath("$.content").isNotEmpty()
+        .jsonPath("$.content[0].id").isEqualTo(tacos[0].getId().toString()).jsonPath("$.content[0].name").isEqualTo("Taco 1").jsonPath("$.content[1].id").isEqualTo(tacos[1].getId().toString())
+        .jsonPath("$.content[1].name").isEqualTo("Taco 2").jsonPath("$.content[11].id").isEqualTo(tacos[11].getId().toString()).jsonPath("$.content[11].name").isEqualTo("Taco 12")
+        .jsonPath("$.content[12]").doesNotExist().jsonPath("$.page").isEqualTo(0).jsonPath("$.totalElements").isEqualTo(12);
   }
 
   @Test
   public void shouldSaveATaco() {
     TacoRepository tacoRepo = Mockito.mock(TacoRepository.class);
-    TacoSearchRepository tacoSearchRepo = Mockito.mock(TacoSearchRepository.class); 
     
     Mono<Taco> unsavedTacoMono = Mono.just(testTaco(null));
     Taco savedTaco = testTaco(null);
     Mono<Taco> savedTacoMono = Mono.just(savedTaco);
 
     when(tacoRepo.save(any())).thenReturn(savedTacoMono);
-
     WebTestClient testClient = WebTestClient.bindToController(
-        new TacoController(tacoRepo, tacoSearchRepo)).build(); 
+        new TacoController(tacoRepo)).build(); 
 
     testClient.post()
         .uri("/api/tacos")
