@@ -73,7 +73,9 @@ public class TacoController {
   public Mono<ResponseEntity<Void>> deleteTaco(@PathVariable("id") String id) {
       return tacoRepo.findById(id)
           .flatMap(tacoExistente -> 
-              favoriteRepo.deleteByTacoId(id).then(tacoRepo.deleteById(id)).then(Mono.just(ResponseEntity.noContent().<Void>build()))
+              favoriteRepo.deleteByTacoId(id) 
+                  .then(tacoRepo.deleteById(id))
+                  .then(Mono.just(ResponseEntity.noContent().<Void>build()))
           )
           .defaultIfEmpty(ResponseEntity.notFound().build());
   }
