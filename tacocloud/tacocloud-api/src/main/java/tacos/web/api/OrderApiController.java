@@ -2,8 +2,19 @@ package tacos.web.api;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tacos.TacoOrder;
@@ -97,27 +108,22 @@ public class OrderApiController {
 
   @PostMapping(path="/fromEmail", consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
-  public Mono<TacoOrder> postOrderFromEmail(@RequestBody Mono<EmailOrder> emailOrder){
-    return emailOrderService.convertEmailOrderToDomainOrder(emailOrder)
-      .flatMap(order -> pricingService.calculatePrices(order))
-      .flatMap(pricedOrder -> inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder))
-      .flatMap(pricedOrder -> repo.save(pricedOrder))
-      .doOnNext(savedOrder -> {
-          try {
-              orderMessages.sendOrder(savedOrder);
-          } catch (Exception ex) {
-              System.err.println("Advertencia: No se pudo enviar el evento al broker (Email). " + ex.getMessage());
-          }
-      })
-      .onErrorResume(e -> {
-          if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
-              return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
-          }
-          if (e instanceof IllegalArgumentException) {
-              return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
-          }
-          return Mono.error(e);
-      });
+  public Mono<TacoOrder> postOrderFromEmail(@RequestBody EmailOrder emailOrder) { 
+      return emailOrderService.convertEmailOrderToDomainOrder(Mono.just(emailOrder))
+          .flatMap(order -> repo.save(order))
+          .doOnNext(savedOrder -> {
+              try {
+                  orderMessages.sendOrder(savedOrder);
+              } catch (Exception ex) {
+                  System.err.println(ex.getMessage());
+              }
+          })
+          .onErrorResume(e -> {
+              if (e instanceof IllegalArgumentException) {
+                  return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
+              }
+              return Mono.error(e);
+          });
   }
 
   @PutMapping(path="/{orderId}", consumes="application/json")
