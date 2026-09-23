@@ -1,6 +1,7 @@
 package tacos;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -22,26 +23,24 @@ public class TacoOrder implements Serializable {
   private User user;
 
   private String deliveryName;
-
   private String deliveryStreet;
-
   private String deliveryCity;
-
   private String deliveryState;
-
   private String deliveryZip;
 
-  private String ccNumber;
+  private String discountCode;
+  private BigDecimal discountAmount = BigDecimal.ZERO;
 
-  private String ccExpiration;
+  private PaymentMethod paymentMethod;
 
-  private String ccCVV;
+  private String status = "PLACED";
 
+  // secambio List<Taco> tacos por "List<OrderItem> items"
+  private List<OrderItem> items = new ArrayList<>();
 
-  private List<Taco> tacos = new ArrayList<>();
+  private BigDecimal total = BigDecimal.ZERO;
 
-  public void addTaco(Taco design) {
-    this.tacos.add(design);
-}
-
+  public void addOrderItem(OrderItem item) {
+    this.items.add(item);
+  }
 }

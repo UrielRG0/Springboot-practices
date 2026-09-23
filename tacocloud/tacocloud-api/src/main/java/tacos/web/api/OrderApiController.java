@@ -1,6 +1,5 @@
 package tacos.web.api;
 
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -19,55 +18,94 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tacos.TacoOrder;
+import tacos.InventoryService;
 import tacos.data.OrderRepository;
 import tacos.messaging.OrderMessagingService;
+import tacos.api.dto.OrderCreateRequest;
+import tacos.api.dto.OrderPatchRequest;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import tacos.User;
+import javax.validation.Valid;
 
 @RestController
-@RequestMapping(path="/api/orders",
-                produces="application/json")
+@RequestMapping(path="/api/orders", produces="application/json")
 @CrossOrigin(origins="http://localhost:8080")
 public class OrderApiController {
 
   private OrderRepository repo;
   private OrderMessagingService orderMessages;
   private EmailOrderService emailOrderService;
+  private PaymentGateway paymentGateway;
+  private OrderPricingService pricingService;
+  private InventoryService inventoryService;
 
   public OrderApiController(OrderRepository repo,
                             OrderMessagingService orderMessages,
-                            EmailOrderService emailOrderService) {
+                            EmailOrderService emailOrderService,
+                            PaymentGateway paymentGateway,
+                            OrderPricingService pricingService,
+                            InventoryService inventoryService) { 
     this.repo = repo;
     this.orderMessages = orderMessages;
     this.emailOrderService = emailOrderService;
+    this.paymentGateway = paymentGateway;
+    this.pricingService = pricingService;
+    this.inventoryService = inventoryService;
   }
 
   @GetMapping(produces="application/json")
-  public Flux<TacoOrder> allOrders() {
-    return repo.findAll();
+  public Flux<TacoOrder> allOrders(@AuthenticationPrincipal User loggedUser) {
+    // Protección contra NPE si loggedUser es nulo
+    if (loggedUser == null) return Flux.empty(); 
+    
+    boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+    if (isAdmin) {
+      return repo.findAll();
+    } else {
+      return repo.findAll().filter(order -> order.getUser() != null && order.getUser().getId().equals(loggedUser.getId()));
+    }
   }
-
-//  @PostMapping(consumes="application/json")
-//  @ResponseStatus(HttpStatus.CREATED)
-//  public Mono<Order> postOrder(@RequestBody Mono<Order> order) {
-//    order.subscribe(orderMessages::sendOrder); // TODO: not ideal...work into reactive flow below
-//    return order
-//        .flatMap(repo::save);
-//  }
 
   @PostMapping(consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
-  public Mono<TacoOrder> postOrder(@RequestBody TacoOrder order) {
-    orderMessages.sendOrder(order);
-    return repo.save(order);
+  public Mono<TacoOrder> postOrder(@Valid @RequestBody OrderCreateRequest request, @AuthenticationPrincipal User loggedUser) {
+    TacoOrder order = tacos.api.dto.OrderMapper.toDomainOrder(request);
+    
+    // 1. Blindaje contra usuario nulo
+    if (loggedUser != null) {
+        order.setUser(loggedUser); 
+    }
+    
+    return paymentGateway.tokenize(request.getPaymentToken(), loggedUser)
+      .flatMap(safePaymentMethod -> {
+          order.setPaymentMethod(safePaymentMethod);
+          return pricingService.calculatePrices(order); 
+      })
+      .flatMap(pricedOrder -> 
+          inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder)
+      )
+      // 2. PRIMERO guardamos en BD para asegurar la transacción...
+      .flatMap(pricedOrder -> repo.save(pricedOrder))
+      // 3. LUEGO mandamos el evento en un try-catch que no rompa el flujo si Kafka/Artemis están apagados
+      .doOnNext(savedOrder -> {
+          try {
+              orderMessages.sendOrder(savedOrder);  
+          } catch (Exception ex) {
+              System.err.println("Advertencia: No se pudo enviar el evento al broker. " + ex.getMessage());
+          }
+      })
+      .onErrorResume(e -> {
+          // 4. Mapeo explícito de errores para evitar que Spring lance un 500 genérico
+          if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
+              return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
+          }
+          if (e instanceof IllegalArgumentException || e instanceof IllegalStateException) {
+              return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
+          }
+          return Mono.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno: " + e.getMessage()));
+      });
   }
 
-  //@PostMapping(path="fromEmail", consumes="application/json")
-  //@ResponseStatus(HttpStatus.CREATED)
-  //public Mono<TacoOrder> postOrderFromEmail(@RequestBody Mono<EmailOrder> emailOrder) {
-  //  Mono<TacoOrder> order = emailOrderService.convertEmailOrderToDomainOrder(emailOrder);
-  //  order.subscribe(orderMessages::sendOrder); // TODO: not ideal...work into reactive flow below
-  //  return order
-  //      .flatMap(repo::save);
-  //}
   @PostMapping(path="/fromEmail", consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
   public Mono<TacoOrder> postOrderFromEmail(@RequestBody EmailOrder emailOrder) { 
@@ -88,77 +126,68 @@ public class OrderApiController {
           });
   }
 
-
-  //@PutMapping(path="/{orderId}", consumes="application/json")
-  //public Mono<TacoOrder> putOrder(@RequestBody Mono<TacoOrder> order) {
-  //  return order.flatMap(repo::save);
-  //}
-
   @PutMapping(path="/{orderId}", consumes="application/json")
-  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @RequestBody TacoOrder order){
-    if(order.getId()!= null && !orderId.equals(order.getId())){
-      return Mono.just(ResponseEntity.badRequest().build());
-    }
-
+  public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @Valid @RequestBody OrderCreateRequest orderDto,
+      @AuthenticationPrincipal User loggedUser){
     return repo.findById(orderId).flatMap(existingOrder ->{
+      
+      boolean isOwner = existingOrder.getUser() != null && loggedUser != null && existingOrder.getUser().getId().equals(loggedUser.getId());
+      boolean isAdmin = loggedUser != null && loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+      
+      if (!isOwner && !isAdmin) {
+        return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<TacoOrder>build());
+      }
 
-      existingOrder.setDeliveryName(order.getDeliveryName());
-      existingOrder.setDeliveryStreet(order.getDeliveryStreet());
-      existingOrder.setDeliveryCity(order.getDeliveryCity());
-      existingOrder.setDeliveryState(order.getDeliveryState());
-      existingOrder.setDeliveryZip(order.getDeliveryZip());
+      existingOrder.setDeliveryName(orderDto.getDeliveryName());
+      existingOrder.setDeliveryStreet(orderDto.getDeliveryStreet());
+      existingOrder.setDeliveryCity(orderDto.getDeliveryCity());
+      existingOrder.setDeliveryState(orderDto.getDeliveryState());
+      existingOrder.setDeliveryZip(orderDto.getDeliveryZip());
+      existingOrder.setItems(orderDto.getItems()); 
 
-      existingOrder.setTacos(order.getTacos());
-
-
-      return repo.save(existingOrder);
-    }).map(savedOrder->ResponseEntity.ok(savedOrder)) //200
-    .defaultIfEmpty(ResponseEntity.notFound().build()); //404
-
+      return pricingService.calculatePrices(existingOrder)
+        .flatMap(pricedOrder -> repo.save(pricedOrder))
+        .map(savedOrder -> ResponseEntity.ok(savedOrder));
+      
+    }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 
   @PatchMapping(path="/{orderId}", consumes="application/json")
-  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,
-                          @RequestBody whiteListOrderApiController patch) {
-
+  public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,@Valid @RequestBody OrderPatchRequest patch, @AuthenticationPrincipal User loggedUser) {
     return repo.findById(orderId)
-        .flatMap(order -> {
-          if (patch.getDeliveryName() != null) {
-            order.setDeliveryName(patch.getDeliveryName());
-          }
-          if (patch.getDeliveryStreet() != null) {
-            order.setDeliveryStreet(patch.getDeliveryStreet());
-          }
-          if (patch.getDeliveryCity() != null) {
-            order.setDeliveryCity(patch.getDeliveryCity());
-          }
-          if (patch.getDeliveryState() != null) {
-            order.setDeliveryState(patch.getDeliveryState());
-          }
-          if (patch.getDeliveryZip() != null) {
-            order.setDeliveryZip(patch.getDeliveryZip());
-          }
-          /*if (patch.getCcNumber() != null) {
-            order.setCcNumber(patch.getCcNumber());
-          }
-          if (patch.getCcExpiration() != null) {
-            order.setCcExpiration(patch.getCcExpiration());
-          }
-          if (patch.getCcCVV() != null) {
-            order.setCcCVV(patch.getCcCVV());
-          }*/
-          return repo.save(order);
-        })
-        .map(savedOrder -> ResponseEntity.ok(savedOrder)) // 200 OK
-        .defaultIfEmpty(ResponseEntity.notFound().build()); //404 if doesnt find anything
+      .flatMap(order -> {
+        boolean isOwner = order.getUser() != null && loggedUser != null && order.getUser().getId().equals(loggedUser.getId());
+        boolean isAdmin = loggedUser != null && loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
+        if (!isOwner && !isAdmin) {
+          return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<TacoOrder>build());
+        }
+        if (patch.getDeliveryName() != null) order.setDeliveryName(patch.getDeliveryName());
+        if (patch.getDeliveryStreet() != null) order.setDeliveryStreet(patch.getDeliveryStreet());
+        if (patch.getDeliveryCity() != null) order.setDeliveryCity(patch.getDeliveryCity());
+        if (patch.getDeliveryState() != null) order.setDeliveryState(patch.getDeliveryState());
+        if (patch.getDeliveryZip() != null) order.setDeliveryZip(patch.getDeliveryZip());
+        
+        return repo.save(order).map(savedOrder -> ResponseEntity.ok(savedOrder));
+      }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 
   @DeleteMapping("/{orderId}")
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId) {
-    return repo.findById(orderId).flatMap(orderToDelete ->{
-      return repo.delete(orderToDelete).thenReturn(ResponseEntity.noContent().<Void>build()); //204 no content
-    }).defaultIfEmpty(ResponseEntity.notFound().build());
-  }
+  public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId, 
+                                                @AuthenticationPrincipal User loggedUser) {
+    return repo.findById(orderId).flatMap(orderToDelete -> {
+      boolean isOwner = orderToDelete.getUser() != null && loggedUser != null && orderToDelete.getUser().getId().equals(loggedUser.getId());
+      boolean isAdmin = loggedUser != null && loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
 
+      if (!isOwner && !isAdmin) {
+        return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).<Void>build());
+      }
+      if (orderToDelete.getStatus() != null && orderToDelete.getStatus().equals("PREPARING")) {
+        return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).<Void>build());
+      }
+      return inventoryService.releaseInventory(orderToDelete)
+          .then(repo.delete(orderToDelete))
+          .thenReturn(ResponseEntity.noContent().<Void>build());
+          
+    }).defaultIfEmpty(ResponseEntity.notFound().build()); 
+  }
 }
