@@ -72,13 +72,10 @@ public class EmailOrderServiceTest {
     public void testConvertEmailOrder_MissingUser() {
         EmailOrder emailOrder = mock(EmailOrder.class);
         when(emailOrder.getEmail()).thenReturn("noexiste@tacocloud.com");
-
-        // Simulamos que el usuario no existe en la base de datos
         when(userRepository.findByEmail(anyString())).thenReturn(Mono.empty());
 
         Mono<TacoOrder> resultMono = emailOrderService.convertEmailOrderToDomainOrder(Mono.just(emailOrder));
 
-        // Verificamos que emita un error controlado
         StepVerifier.create(resultMono)
             .expectError()
             .verify();
