@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -69,11 +70,22 @@ public class OrderApiController {
   //}
   @PostMapping(path="/fromEmail", consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
-  public Mono<TacoOrder> postOrderFromEmail(@RequestBody Mono<EmailOrder> emailOrder){
-    return emailOrderService.convertEmailOrderToDomainOrder(emailOrder).flatMap(order -> repo.save(order)).doOnNext(savedOrder ->{
-      orderMessages.sendOrder(savedOrder);
-    });
-    
+  public Mono<TacoOrder> postOrderFromEmail(@RequestBody EmailOrder emailOrder) { 
+      return emailOrderService.convertEmailOrderToDomainOrder(Mono.just(emailOrder))
+          .flatMap(order -> repo.save(order))
+          .doOnNext(savedOrder -> {
+              try {
+                  orderMessages.sendOrder(savedOrder);
+              } catch (Exception ex) {
+                  System.err.println(ex.getMessage());
+              }
+          })
+          .onErrorResume(e -> {
+              if (e instanceof IllegalArgumentException) {
+                  return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage()));
+              }
+              return Mono.error(e);
+          });
   }
 
 
