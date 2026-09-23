@@ -1,7 +1,6 @@
 package tacos.web.api;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -9,6 +8,9 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -16,25 +18,25 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import tacos.TacoOrder;
 import tacos.data.OrderRepository;
-import tacos.messaging.OrderMessagingService; // Import que sí tienes
+import tacos.messaging.OrderMessagingService;
 
 public class OrderApiControllerTestPost {
 
+    @Mock
     private EmailOrderService emailOrderService;
+    
+    @Mock
     private OrderRepository repo;
+    
+    @Mock
     private OrderMessagingService orderMessages;
     
+    @InjectMocks
     private OrderApiController controller;
 
     @BeforeEach
     public void setUp() {
-        emailOrderService = mock(EmailOrderService.class);
-        repo = mock(OrderRepository.class);
-        orderMessages = mock(OrderMessagingService.class);
-        
-        // ¡OJO AQUÍ!: Asegúrate de que tu constructor real del OrderApiController coincida con esto.
-        // Si tu constructor pide más cosas (como InventoryService), agrégalas aquí como mocks.
-        controller = new OrderApiController(repo, orderMessages, emailOrderService); 
+        MockitoAnnotations.openMocks(this);
     }
 
     @Test
@@ -46,16 +48,12 @@ public class OrderApiControllerTestPost {
         when(repo.save(any())).thenReturn(Mono.just(mockOrder));
 
         Mono<TacoOrder> resultMono = controller.postOrderFromEmail(emailOrder);
-
-        // Aún no hay suscripción, nada se ejecuta
         verify(repo, never()).save(any());
         verify(orderMessages, never()).sendOrder(any());
 
         StepVerifier.create(resultMono)
             .expectNextCount(1)
             .verifyComplete();
-
-        // Exactamente una invocación
         verify(repo, times(1)).save(any());
         verify(orderMessages, times(1)).sendOrder(any());
     }
@@ -94,6 +92,6 @@ public class OrderApiControllerTestPost {
             .verify();
 
         verify(repo, times(1)).save(any());
-        verify(orderMessages, never()).sendOrder(any()); // No se publica si falla el guardado
+        verify(orderMessages, never()).sendOrder(any());
     }
 }

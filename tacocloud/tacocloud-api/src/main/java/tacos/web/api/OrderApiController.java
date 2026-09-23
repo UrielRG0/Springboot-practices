@@ -55,7 +55,6 @@ public class OrderApiController {
 
   @GetMapping(produces="application/json")
   public Flux<TacoOrder> allOrders(@AuthenticationPrincipal User loggedUser) {
-    // Protección contra NPE si loggedUser es nulo
     if (loggedUser == null) return Flux.empty(); 
     
     boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
@@ -71,7 +70,6 @@ public class OrderApiController {
   public Mono<TacoOrder> postOrder(@Valid @RequestBody OrderCreateRequest request, @AuthenticationPrincipal User loggedUser) {
     TacoOrder order = tacos.api.dto.OrderMapper.toDomainOrder(request);
     
-    // 1. Blindaje contra usuario nulo
     if (loggedUser != null) {
         order.setUser(loggedUser); 
     }
@@ -84,9 +82,7 @@ public class OrderApiController {
       .flatMap(pricedOrder -> 
           inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder)
       )
-      // 2. PRIMERO guardamos en BD para asegurar la transacción...
       .flatMap(pricedOrder -> repo.save(pricedOrder))
-      // 3. LUEGO mandamos el evento en un try-catch que no rompa el flujo si Kafka/Artemis están apagados
       .doOnNext(savedOrder -> {
           try {
               orderMessages.sendOrder(savedOrder);  
@@ -95,7 +91,6 @@ public class OrderApiController {
           }
       })
       .onErrorResume(e -> {
-          // 4. Mapeo explícito de errores para evitar que Spring lance un 500 genérico
           if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
               return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
           }
