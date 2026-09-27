@@ -29,6 +29,9 @@ import tacos.api.dto.OrderSummaryDTO;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import tacos.User;
+
+import java.math.BigDecimal;
+
 import javax.validation.Valid;
 
 @RestController
@@ -236,6 +239,66 @@ public class OrderApiController {
       dto.setDeliveryName(order.getDeliveryName());
       return dto;
   }
+
+  // Reorder a order
+  @PostMapping(path="/orders/{orderId}/reorder", consumes="application/json")
+  public Mono<ResponseEntity<Object>> reorder(
+          @PathVariable String orderId,
+          @RequestBody tacos.api.dto.ReorderRequest request,
+          @AuthenticationPrincipal User loggedUser) {
+      
+      if (loggedUser == null) {
+          return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+      }
+
+      return repo.findById(orderId)
+          .filter(oldOrder -> oldOrder.getUser() != null && oldOrder.getUser().getId().equals(loggedUser.getId()))
+          .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Orden no encontrada")))
+          .flatMap(oldOrder -> {
+              TacoOrder newOrder = new TacoOrder(); 
+              newOrder.setUser(loggedUser);
+              newOrder.setDeliveryName(oldOrder.getDeliveryName());
+              newOrder.setDeliveryStreet(oldOrder.getDeliveryStreet());
+              newOrder.setDeliveryCity(oldOrder.getDeliveryCity());
+              newOrder.setDeliveryState(oldOrder.getDeliveryState());
+              newOrder.setDeliveryZip(oldOrder.getDeliveryZip());
+              newOrder.setItems(oldOrder.getItems()); 
+              return pricingService.calculatePrices(newOrder).flatMap(pricedOrder -> {
+                      
+                      BigDecimal oldTotal = oldOrder.getTotal() != null ? oldOrder.getTotal() : BigDecimal.ZERO;
+                      BigDecimal newTotal = pricedOrder.getTotal() != null ? pricedOrder.getTotal() : BigDecimal.ZERO;
+                      if (oldTotal.compareTo(newTotal) != 0 && !request.isConfirmPriceChange()) {
+                          tacos.api.dto.ReorderQuoteDTO quote = new tacos.api.dto.ReorderQuoteDTO();
+                          quote.setMessage("The price of the product has been changed");
+                          quote.setOldTotal(oldTotal);
+                          quote.setNewTotal(newTotal);
+                          quote.setRequiresConfirmation(true);
+                          return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).body((Object) quote));
+                      }
+                      
+                      return paymentGateway.tokenize(request.getPaymentToken(), loggedUser)
+                          .flatMap(safePaymentMethod -> {
+                              pricedOrder.setPaymentMethod(safePaymentMethod); 
+                              return inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder);
+                          })
+                          .flatMap(repo::save)
+                          .doOnNext(savedOrder -> {
+                              try { orderMessages.sendOrder(savedOrder); } 
+                              catch (Exception ex) { System.err.println("Broker err: " + ex.getMessage()); }
+                          })
+                          .map(savedOrder -> ResponseEntity.status(HttpStatus.CREATED).body((Object) toSummaryDTO(savedOrder)));
+              });
+          })
+          .onErrorResume(e -> {
+              if (e instanceof ResponseStatusException) return Mono.error(e);
+              if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
+                  return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
+              }
+              return Mono.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage()));
+          });
+  }
+
+
 
   private OrderDetailDTO toDetailDTO(TacoOrder order) {
       OrderDetailDTO dto = new OrderDetailDTO();
