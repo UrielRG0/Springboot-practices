@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,13 +23,16 @@ import tacos.InventoryService;
 import tacos.data.OrderRepository;
 import tacos.messaging.OrderMessagingService;
 import tacos.api.dto.OrderCreateRequest;
+import tacos.api.dto.OrderDetailDTO;
 import tacos.api.dto.OrderPatchRequest;
+import tacos.api.dto.OrderSummaryDTO;
+
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import tacos.User;
 import javax.validation.Valid;
 
 @RestController
-@RequestMapping(path="/api/orders", produces="application/json")
+@RequestMapping(path="/api", produces="application/json")
 @CrossOrigin(origins="http://localhost:8080")
 public class OrderApiController {
 
@@ -53,19 +57,55 @@ public class OrderApiController {
     this.inventoryService = inventoryService;
   }
 
-  @GetMapping(produces="application/json")
-  public Flux<TacoOrder> allOrders(@AuthenticationPrincipal User loggedUser) {
-    if (loggedUser == null) return Flux.empty(); 
-    
-    boolean isAdmin = loggedUser.getRole() != null && loggedUser.getRole().contains("ADMIN");
-    if (isAdmin) {
-      return repo.findAll();
-    } else {
-      return repo.findAll().filter(order -> order.getUser() != null && order.getUser().getId().equals(loggedUser.getId()));
-    }
+  //User paggination
+  @GetMapping(path = "/users/me/orders")
+  public Flux<OrderSummaryDTO> myOrders(
+          @RequestParam(defaultValue = "0") int page,
+          @RequestParam(defaultValue = "20") int size,
+          @AuthenticationPrincipal User loggedUser) {
+      
+      if (loggedUser == null) return Flux.empty();
+
+      org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+              page, size, org.springframework.data.domain.Sort.by(
+                      org.springframework.data.domain.Sort.Direction.DESC, "placedAt", "id"));
+      return repo.findByUserOrderByPlacedAtDesc(loggedUser, pageable).map(this::toSummaryDTO);
   }
 
-  @PostMapping(consumes="application/json")
+  // Order datails
+  @GetMapping(path = "/users/me/orders/{id}")
+  public Mono<ResponseEntity<OrderDetailDTO>> myOrderDetail(
+          @PathVariable String id,
+          @AuthenticationPrincipal User loggedUser) {
+      
+      if (loggedUser == null) return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+
+      return repo.findById(id)
+              .filter(order -> order.getUser() != null && order.getUser().getId().equals(loggedUser.getId()))
+              .map(order -> ResponseEntity.ok(toDetailDTO(order)))
+              .defaultIfEmpty(ResponseEntity.notFound().build());
+  }
+
+  // Admin Orders
+  @GetMapping(path = "/admin/orders")
+  public Flux<OrderSummaryDTO> adminOrders(
+          @RequestParam(defaultValue = "0") int page,
+          @RequestParam(defaultValue = "20") int size,
+          @AuthenticationPrincipal User loggedUser) {
+      
+      if (loggedUser == null || loggedUser.getRole() == null || !loggedUser.getRole().contains("ADMIN")) {
+          return Flux.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "Acceso denegado"));
+      }
+
+      org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+              page, size, org.springframework.data.domain.Sort.by(
+                      org.springframework.data.domain.Sort.Direction.DESC, "placedAt", "id"));
+
+      return repo.findAllBy(pageable).map(this::toSummaryDTO);
+  }
+
+  // create order
+  @PostMapping(path="/orders", consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
   public Mono<TacoOrder> postOrder(@Valid @RequestBody OrderCreateRequest request, @AuthenticationPrincipal User loggedUser) {
     TacoOrder order = tacos.api.dto.OrderMapper.toDomainOrder(request);
@@ -92,7 +132,6 @@ public class OrderApiController {
       })
       .onErrorResume(e -> {
           e.printStackTrace(); 
-          
           if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
               return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
           }
@@ -103,7 +142,7 @@ public class OrderApiController {
       });
   }
 
-  @PostMapping(path="/fromEmail", consumes="application/json")
+  @PostMapping(path="/orders/fromEmail", consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
   public Mono<TacoOrder> postOrderFromEmail(@RequestBody EmailOrder emailOrder) { 
       return emailOrderService.convertEmailOrderToDomainOrder(Mono.just(emailOrder))
@@ -123,7 +162,7 @@ public class OrderApiController {
           });
   }
 
-  @PutMapping(path="/{orderId}", consumes="application/json")
+  @PutMapping(path="/orders/{orderId}", consumes="application/json")
   public Mono<ResponseEntity<TacoOrder>> updateOrder(@PathVariable String orderId, @Valid @RequestBody OrderCreateRequest orderDto,
       @AuthenticationPrincipal User loggedUser){
     return repo.findById(orderId).flatMap(existingOrder ->{
@@ -149,7 +188,7 @@ public class OrderApiController {
     }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 
-  @PatchMapping(path="/{orderId}", consumes="application/json")
+  @PatchMapping(path="/orders/{orderId}", consumes="application/json")
   public Mono<ResponseEntity<TacoOrder>> patchOrder(@PathVariable("orderId") String orderId,@Valid @RequestBody OrderPatchRequest patch, @AuthenticationPrincipal User loggedUser) {
     return repo.findById(orderId)
       .flatMap(order -> {
@@ -168,7 +207,7 @@ public class OrderApiController {
       }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 
-  @DeleteMapping("/{orderId}")
+  @DeleteMapping("/orders/{orderId}")
   public Mono<ResponseEntity<Void>> deleteOrder(@PathVariable String orderId, 
                                                 @AuthenticationPrincipal User loggedUser) {
     return repo.findById(orderId).flatMap(orderToDelete -> {
@@ -184,7 +223,32 @@ public class OrderApiController {
       return inventoryService.releaseInventory(orderToDelete)
           .then(repo.delete(orderToDelete))
           .thenReturn(ResponseEntity.noContent().<Void>build());
-          
+        
     }).defaultIfEmpty(ResponseEntity.notFound().build()); 
+  }
+
+  private OrderSummaryDTO toSummaryDTO(TacoOrder order) {
+      OrderSummaryDTO dto = new OrderSummaryDTO();
+      dto.setId(order.getId());
+      dto.setPlacedAt(order.getPlacedAt());
+      dto.setStatus(order.getStatus());
+      dto.setTotal(order.getTotal());
+      dto.setDeliveryName(order.getDeliveryName());
+      return dto;
+  }
+
+  private OrderDetailDTO toDetailDTO(TacoOrder order) {
+      OrderDetailDTO dto = new OrderDetailDTO();
+      dto.setId(order.getId());
+      dto.setPlacedAt(order.getPlacedAt());
+      dto.setStatus(order.getStatus());
+      dto.setTotal(order.getTotal());
+      dto.setDeliveryName(order.getDeliveryName());
+      dto.setDeliveryStreet(order.getDeliveryStreet());
+      dto.setDeliveryCity(order.getDeliveryCity());
+      dto.setDeliveryState(order.getDeliveryState());
+      dto.setDeliveryZip(order.getDeliveryZip());
+      dto.setItems(order.getItems());
+      return dto;
   }
 }
