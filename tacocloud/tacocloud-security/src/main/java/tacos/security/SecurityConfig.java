@@ -34,9 +34,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
         .antMatchers("/actuator/**").hasRole("ADMIN")
         .antMatchers("/api/kitchen/**").hasRole("KITCHEN")
         .antMatchers("/api/orders", "/api/orders/**").hasAnyRole("USER", "ADMIN")
-        .antMatchers("/api/admin/ingredients/**").hasRole("ADMIN") // <-- En su posición correcta
+        .antMatchers("/api/admin/ingredients/**").hasRole("ADMIN") 
         .antMatchers("/data-api/**").denyAll()
-        .anyRequest().authenticated() // <-- El comodín cerrando la cadena
+        .anyRequest().authenticated() 
       .and()
         .httpBasic(); 
   }

@@ -13,6 +13,24 @@ taco:
       abcdef: 10
 
 
+tacos:
+  discount:
+    codes:
+      TACO10:
+        type: PERCENTAGE
+        value: 10.00
+        min-purchase: 20.00
+        max-discount: 50.00
+        start-date: "2026-01-01"
+        end-date: "2026-12-31"
+      FESTIVAL50:
+        type: FIXED
+        value: 50.00
+        min-purchase: 100.00
+        start-date: "2026-09-01"
+        end-date: "2026-09-30"
+
+
 
 #logging:
 #  level:

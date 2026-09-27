@@ -3,7 +3,7 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.PersistenceConstructor; // <-- El import mágico
+import org.springframework.data.annotation.PersistenceConstructor; 
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -16,7 +16,6 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor(access=AccessLevel.PRIVATE, force=true)
-// Quitamos el @RequiredArgsConstructor porque lo vamos a hacer manual
 @Document
 public class User implements UserDetails {
 
@@ -40,8 +39,7 @@ public class User implements UserDetails {
   private final String email;
 
   private final String role;
-  
-  // ¡EL TRUCO PARA MONGO! Le decimos explícitamente cómo inyectar los campos 'final'
+
   @PersistenceConstructor
   public User(String username, String password, String fullname, String street, 
               String city, String state, String zip, String phoneNumber, 

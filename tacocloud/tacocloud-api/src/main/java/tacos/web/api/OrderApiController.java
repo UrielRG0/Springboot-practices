@@ -91,6 +91,8 @@ public class OrderApiController {
           }
       })
       .onErrorResume(e -> {
+          e.printStackTrace(); 
+          
           if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
               return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
           }
