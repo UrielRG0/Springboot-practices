@@ -30,29 +30,34 @@ public class OrderPlacementService {
     }
 
     public Mono<TacoOrder> placeOrderTransactionally(TacoOrder order) {
-        Mono<TacoOrder> execution = orderRepo.save(order)
-            .flatMap(savedOrder -> {
-                OrderEventPayload payload = OrderEventPayload.fromDomain(savedOrder);
-                OrderEvent event = new OrderEvent(OrderEventType.ORDER_CREATED, savedOrder.getId(), payload);
+        return Mono.deferContextual(ctx -> {
+            String correlationId = ctx.getOrDefault("correlationId", "UNKNOWN_CORRELATION_ID");
 
-                OutboxEvent outbox = new OutboxEvent();
-                outbox.setId(event.getEventId());
-                outbox.setEvent(event);
-                outbox.setState("NEW");
-                outbox.setRetries(0);
-                outbox.setCreatedAt(new Date());
-                outbox.setUpdatedAt(new Date());
+            Mono<TacoOrder> execution = orderRepo.save(order)
+                .flatMap(savedOrder -> {
+                    OrderEventPayload payload = OrderEventPayload.fromDomain(savedOrder);
+                    OrderEvent event = new OrderEvent(OrderEventType.ORDER_CREATED, savedOrder.getId(), payload);
+                    event.setCorrelationId(correlationId); 
 
-                return mongoTemplate.save(outbox).thenReturn(savedOrder);
-            });
+                    OutboxEvent outbox = new OutboxEvent();
+                    outbox.setId(event.getEventId());
+                    outbox.setEvent(event);
+                    outbox.setState("NEW");
+                    outbox.setRetries(0);
+                    outbox.setCreatedAt(new Date());
+                    outbox.setUpdatedAt(new Date());
 
-        return execution
-            .as(transactionalOperator::transactional)
-            .onErrorResume(e -> {
-                if (e.getMessage() != null && (e.getMessage().contains("Sessions are not supported") || e.getMessage().contains("Transaction"))) {
-                    return execution;
-                }
-                return Mono.error(e);
-            });
+                    return mongoTemplate.save(outbox).thenReturn(savedOrder);
+                });
+
+            return execution
+                .as(transactionalOperator::transactional)
+                .onErrorResume(e -> {
+                    if (e.getMessage() != null && (e.getMessage().contains("Sessions are not supported") || e.getMessage().contains("Transaction"))) {
+                        return execution;
+                    }
+                    return Mono.error(e);
+                });
+        });
     }
 }
