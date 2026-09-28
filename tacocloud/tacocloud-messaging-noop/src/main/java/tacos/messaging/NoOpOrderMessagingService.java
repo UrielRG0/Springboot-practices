@@ -3,8 +3,10 @@ package tacos.messaging;
 import org.springframework.stereotype.Service;
 import tacos.messaging.contract.OrderEvent;
 import tacos.messaging.contract.OrderMessagingService; 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
-@Service
+@Service 
+@ConditionalOnProperty(name = "tacocloud.messaging.transport", havingValue = "noop", matchIfMissing = true)
 public class NoOpOrderMessagingService implements OrderMessagingService {
 
     @Override

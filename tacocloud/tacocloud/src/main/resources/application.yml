@@ -30,6 +30,11 @@ tacos:
         start-date: "2026-09-01"
         end-date: "2026-09-30"
 
+tacocloud:
+  messaging:
+    transport: noop
+    destination:
+      orders: tacocloud.orders.queue
 
 
 #logging:
