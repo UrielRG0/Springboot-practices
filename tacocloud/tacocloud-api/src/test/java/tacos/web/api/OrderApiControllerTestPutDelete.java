@@ -63,7 +63,7 @@ public class OrderApiControllerTestPutDelete {
     @Test
     public void testDeleteOrderSuccess() {
         TacoOrder order = new TacoOrder();
-        order.setStatus("PLACED");
+        order.setStatus(tacos.OrderStatus.PREPARING);
         order.setUser(propietario);
         TacoOrder saved = repo.save(order).block();
         testClient.delete().uri("/api/orders/" + saved.getId()).headers(h -> h.setBasicAuth("propietario", "password")).exchange().expectStatus().isNoContent();
@@ -80,7 +80,7 @@ public class OrderApiControllerTestPutDelete {
     @Test
     public void testDeleteOrderConflict_Preparing() {
         TacoOrder order = new TacoOrder();
-        order.setStatus("PREPARING"); 
+        order.setStatus(tacos.OrderStatus.PREPARING);
         order.setUser(propietario);
         TacoOrder saved = repo.save(order).block();
         testClient.delete().uri("/api/orders/" + saved.getId()).headers(h -> h.setBasicAuth("propietario", "password")).exchange().expectStatus().isEqualTo(409); 

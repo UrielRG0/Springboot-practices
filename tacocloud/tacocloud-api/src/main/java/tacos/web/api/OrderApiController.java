@@ -20,6 +20,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tacos.TacoOrder;
 import tacos.InventoryService;
+import tacos.OrderStatus;
+import tacos.OrderWorkflowService;
 import tacos.data.OrderRepository;
 import tacos.messaging.OrderMessagingService;
 import tacos.api.dto.OrderCreateRequest;
@@ -45,19 +47,22 @@ public class OrderApiController {
   private PaymentGateway paymentGateway;
   private OrderPricingService pricingService;
   private InventoryService inventoryService;
+  private OrderWorkflowService workflowService;
 
   public OrderApiController(OrderRepository repo,
                             OrderMessagingService orderMessages,
                             EmailOrderService emailOrderService,
                             PaymentGateway paymentGateway,
                             OrderPricingService pricingService,
-                            InventoryService inventoryService) { 
+                            InventoryService inventoryService,
+                          OrderWorkflowService workflowService) { 
     this.repo = repo;
     this.orderMessages = orderMessages;
     this.emailOrderService = emailOrderService;
     this.paymentGateway = paymentGateway;
     this.pricingService = pricingService;
     this.inventoryService = inventoryService;
+    this.workflowService=workflowService;
   }
 
   //User paggination
@@ -230,15 +235,6 @@ public class OrderApiController {
     }).defaultIfEmpty(ResponseEntity.notFound().build()); 
   }
 
-  private OrderSummaryDTO toSummaryDTO(TacoOrder order) {
-      OrderSummaryDTO dto = new OrderSummaryDTO();
-      dto.setId(order.getId());
-      dto.setPlacedAt(order.getPlacedAt());
-      dto.setStatus(order.getStatus());
-      dto.setTotal(order.getTotal());
-      dto.setDeliveryName(order.getDeliveryName());
-      return dto;
-  }
 
   // Reorder a order
   @PostMapping(path="/orders/{orderId}/reorder", consumes="application/json")
@@ -298,13 +294,24 @@ public class OrderApiController {
           });
   }
 
-
+  // --- Métodos Helper DTO CORREGIDOS ---
+  private OrderSummaryDTO toSummaryDTO(TacoOrder order) {
+      OrderSummaryDTO dto = new OrderSummaryDTO();
+      dto.setId(order.getId());
+      dto.setPlacedAt(order.getPlacedAt());
+      // AQUI ESTÁ LA MAGIA: Convertimos el Enum a String con .name()
+      dto.setStatus(order.getStatus() != null ? order.getStatus().name() : null); 
+      dto.setTotal(order.getTotal());
+      dto.setDeliveryName(order.getDeliveryName());
+      return dto;
+  }
 
   private OrderDetailDTO toDetailDTO(TacoOrder order) {
       OrderDetailDTO dto = new OrderDetailDTO();
       dto.setId(order.getId());
       dto.setPlacedAt(order.getPlacedAt());
-      dto.setStatus(order.getStatus());
+      // AQUI ESTÁ LA MAGIA: Convertimos el Enum a String con .name()
+      dto.setStatus(order.getStatus() != null ? order.getStatus().name() : null);
       dto.setTotal(order.getTotal());
       dto.setDeliveryName(order.getDeliveryName());
       dto.setDeliveryStreet(order.getDeliveryStreet());
@@ -314,4 +321,46 @@ public class OrderApiController {
       dto.setItems(order.getItems());
       return dto;
   }
+
+  // --- TC-25: Cancelar Orden (Solo Dueño) ---
+  @PostMapping(path="/orders/{orderId}/cancel", consumes="application/json")
+  public reactor.core.publisher.Mono<org.springframework.http.ResponseEntity<tacos.api.dto.OrderSummaryDTO>> cancelOrder(
+          @PathVariable String orderId,
+          @RequestBody(required = false) java.util.Map<String, String> payload,
+          @AuthenticationPrincipal User loggedUser) {
+      
+      String reason = payload != null && payload.containsKey("reason") ? payload.get("reason") : "Cancelada por usuario";
+
+      return repo.findById(orderId)
+          // SOLUCIÓN: Agregamos <TacoOrder> explícitamente aquí
+          .switchIfEmpty(reactor.core.publisher.Mono.<TacoOrder>error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Orden no encontrada")))
+          // SOLUCIÓN: Forzamos el tipo en el lambda
+          .map((TacoOrder order) -> workflowService.transitionStatus(order, OrderStatus.CANCELLED, loggedUser, reason))
+          .flatMap(repo::save)
+          .onErrorResume(org.springframework.dao.OptimisticLockingFailureException.class, 
+                  e -> reactor.core.publisher.Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, "Conflicto de versiones: alguien modificó la orden al mismo tiempo.")))
+          .map(saved -> ResponseEntity.ok(toSummaryDTO(saved)));
+  }
+
+  // --- TC-25: Avanzar Estado (Solo Personal/Admin) ---
+  @PatchMapping(path="/orders/{orderId}/status", consumes="application/json")
+  public reactor.core.publisher.Mono<org.springframework.http.ResponseEntity<tacos.api.dto.OrderSummaryDTO>> updateStatus(
+          @PathVariable String orderId,
+          @RequestBody tacos.api.dto.OrderStatusUpdateRequest request,
+          @AuthenticationPrincipal User loggedUser) {
+      
+      return repo.findById(orderId)
+          // SOLUCIÓN: Agregamos <TacoOrder> explícitamente aquí
+          .switchIfEmpty(reactor.core.publisher.Mono.<TacoOrder>error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Orden no encontrada")))
+          // SOLUCIÓN: Forzamos el tipo en el lambda
+          .map((TacoOrder order) -> workflowService.transitionStatus(order, request.getStatus(), loggedUser, request.getReason()))
+          .flatMap(repo::save)
+          .onErrorResume(org.springframework.dao.OptimisticLockingFailureException.class, 
+                  e -> reactor.core.publisher.Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, "Conflicto de versiones: inténtalo de nuevo.")))
+          .map(saved -> ResponseEntity.ok(toSummaryDTO(saved)));
+  }
+
+
+
+
 }

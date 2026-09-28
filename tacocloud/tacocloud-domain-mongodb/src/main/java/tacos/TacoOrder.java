@@ -33,9 +33,13 @@ public class TacoOrder implements Serializable {
 
   private PaymentMethod paymentMethod;
 
-  private String status = "PLACED";
+  private OrderStatus status = OrderStatus.CREATED;
 
-  // secambio List<Taco> tacos por "List<OrderItem> items"
+  private java.util.List<OrderAuditLog> statusHistory = new java.util.ArrayList<>();
+
+  @org.springframework.data.annotation.Version
+  private Long version;
+
   private List<OrderItem> items = new ArrayList<>();
 
   private BigDecimal total = BigDecimal.ZERO;
