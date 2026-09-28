@@ -44,6 +44,9 @@ public class TacoOrder implements Serializable {
 
   private BigDecimal total = BigDecimal.ZERO;
 
+  private String cookId;
+  private Integer estimatedPrepMinutes;
+
   public void addOrderItem(OrderItem item) {
     this.items.add(item);
   }
