@@ -48,7 +48,6 @@ spring:
         username: admin
         password: 53cr3t
 
-  # CONFIGURACIÓN DE RABBITMQ PARA EL TC-30
   rabbitmq:
     listener:
       simple:
