@@ -10,7 +10,8 @@ import tacos.User;
 import tacos.InventoryService;
 import tacos.web.api.PaymentGateway;
 import tacos.data.OrderRepository;
-import tacos.messaging.OrderMessagingService;
+// AQUÍ ESTÁ EL CAMBIO: Importamos el nuevo contrato
+import tacos.messaging.contract.OrderMessagingService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
