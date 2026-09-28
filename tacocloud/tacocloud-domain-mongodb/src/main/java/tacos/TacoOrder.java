@@ -50,4 +50,13 @@ public class TacoOrder implements Serializable {
   public void addOrderItem(OrderItem item) {
     this.items.add(item);
   }
+
+  public OrderStatus getStatus() {
+      return status;
+  }
+
+  public void setStatus(OrderStatus status) {
+      this.status = status;
+  }
+
 }

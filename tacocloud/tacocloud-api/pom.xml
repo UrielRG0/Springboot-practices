@@ -44,6 +44,12 @@
 			<artifactId>tacocloud-messaging-noop</artifactId>
 			<version>${tacocloud.version}</version>
 		</dependency>
+
+		<dependency>
+			<groupId>sia</groupId>
+			<artifactId>tacocloud-kitchen</artifactId>
+			<version>${tacocloud.version}</version>
+		</dependency>
 <!--  		<dependency>
 			<groupId>sia</groupId>
 			<artifactId>tacocloud-messaging-jms</artifactId>
