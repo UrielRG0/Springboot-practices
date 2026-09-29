@@ -2,18 +2,8 @@ package tacos.web.api;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -21,20 +11,20 @@ import tacos.TacoOrder;
 import tacos.InventoryService;
 import tacos.OrderStatus;
 import tacos.OrderWorkflowService;
+import tacos.User;
+import tacos.core.OrderPlacementService;
 import tacos.data.OrderRepository;
 import tacos.api.dto.OrderCreateRequest;
 import tacos.api.dto.OrderDetailDTO;
 import tacos.api.dto.OrderPatchRequest;
 import tacos.api.dto.OrderSummaryDTO;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import tacos.User;
-import java.math.BigDecimal;
-import javax.validation.Valid;
-
 import tacos.messaging.contract.OrderMessagingService;
 import tacos.messaging.contract.OrderEventPayload;
 import tacos.messaging.contract.OrderEvent;
 import tacos.messaging.contract.OrderEventType;
+
+import javax.validation.Valid;
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping(path="/api", produces="application/json")
@@ -48,6 +38,7 @@ public class OrderApiController {
   private OrderPricingService pricingService;
   private InventoryService inventoryService;
   private OrderWorkflowService workflowService;
+  private OrderPlacementService placementService; 
 
   public OrderApiController(OrderRepository repo,
                             OrderMessagingService orderMessages,
@@ -55,7 +46,8 @@ public class OrderApiController {
                             PaymentGateway paymentGateway,
                             OrderPricingService pricingService,
                             InventoryService inventoryService,
-                            OrderWorkflowService workflowService) { 
+                            OrderWorkflowService workflowService,
+                            OrderPlacementService placementService) { 
     this.repo = repo;
     this.orderMessages = orderMessages;
     this.emailOrderService = emailOrderService;
@@ -63,6 +55,7 @@ public class OrderApiController {
     this.pricingService = pricingService;
     this.inventoryService = inventoryService;
     this.workflowService = workflowService;
+    this.placementService = placementService;
   }
 
   @GetMapping(path = "/users/me/orders")
@@ -111,13 +104,21 @@ public class OrderApiController {
 
   @PostMapping(path="/orders", consumes="application/json")
   @ResponseStatus(HttpStatus.CREATED)
-  public Mono<TacoOrder> postOrder(@Valid @RequestBody OrderCreateRequest request, @AuthenticationPrincipal User loggedUser) {
+  public Mono<TacoOrder> postOrder(
+          @Valid @RequestBody OrderCreateRequest request, 
+          @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey, 
+          @AuthenticationPrincipal User loggedUser) {
+    
     TacoOrder order = tacos.api.dto.OrderMapper.toDomainOrder(request);
+    String userId = "anonymous";
     
     if (loggedUser != null) {
         order.setUser(loggedUser); 
+        userId = loggedUser.getId() != null ? loggedUser.getId() : "anonymous";
     }
     
+    String finalUserId = userId;
+
     return paymentGateway.tokenize(request.getPaymentToken(), loggedUser)
       .flatMap(safePaymentMethod -> {
           order.setPaymentMethod(safePaymentMethod);
@@ -126,17 +127,9 @@ public class OrderApiController {
       .flatMap(pricedOrder -> 
           inventoryService.reserveInventory(pricedOrder).thenReturn(pricedOrder)
       )
-      .flatMap(pricedOrder -> repo.save(pricedOrder))
-      .doOnNext(savedOrder -> {
-          try {
-              OrderEventPayload payload = OrderEventPayload.fromDomain(savedOrder);
-              OrderEvent event = new OrderEvent(OrderEventType.ORDER_CREATED, savedOrder.getId(), payload);
-              orderMessages.sendOrderEvent(event); 
-          } catch (Exception ex) {
-              System.err.println(ex.getMessage());
-          }
-      })
+      .flatMap(pricedOrder -> placementService.placeOrderTransactionally(pricedOrder, idempotencyKey, finalUserId))
       .onErrorResume(e -> {
+          if (e instanceof ResponseStatusException) return Mono.error(e);
           if (e.getMessage() != null && e.getMessage().contains("INSUFFICIENT_STOCK")) {
               return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
           }
@@ -327,7 +320,7 @@ public class OrderApiController {
           @RequestBody(required = false) java.util.Map<String, String> payload,
           @AuthenticationPrincipal User loggedUser) {
       
-      String reason = payload != null && payload.containsKey("reason") ? payload.get("reason") : "Cancelada por usuario";
+      String reason = payload != null && payload.containsKey("reason") ? payload.get("reason") : "Canceled by user";
 
       return repo.findById(orderId)
           .switchIfEmpty(reactor.core.publisher.Mono.<TacoOrder>error(new ResponseStatusException(HttpStatus.NOT_FOUND)))
