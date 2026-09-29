@@ -26,7 +26,7 @@ import tacos.data.TacoRepository;
 import tacos.data.FavoriteRepository;
 
 @RestController
-@RequestMapping(path = "/api/tacos", produces = "application/json")
+@RequestMapping(path = {"/api/v1/tacos", "/api/tacos"}, produces = "application/json")
 @CrossOrigin(origins="http://localhost:8080")
 public class TacoController {
 

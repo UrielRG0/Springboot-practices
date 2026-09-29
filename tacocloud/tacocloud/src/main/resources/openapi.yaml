@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: Taco Cloud API
+  description: API oficial para pedidos y catálogo de Taco Cloud.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Servidor Local v1
+  - url: http://localhost:8080/api
+    description: (Deprecated) Servidor Legado
+paths:
+  /orders:
+    post:
+      summary: Crea una nueva orden de tacos
+      description: Procesa una orden, reserva inventario y cobra mediante pasarela.
+      security:
+        - basicAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+          required: false
+          description: Llave única para evitar doble cobro en reintentos.
+        - in: header
+          name: X-Correlation-Id
+          schema:
+            type: string
+          required: false
+          description: ID de rastreo para observabilidad en logs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+      responses:
+        '201':
+          description: Orden creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderSummary'
+        '400':
+          description: Datos de la orden inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: Conflicto (Falta de inventario o Idempotencia)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+  schemas:
+    OrderCreateRequest:
+      type: object
+      required:
+        - deliveryName
+        - paymentToken
+      properties:
+        deliveryName:
+          type: string
+          example: "Tony Stark"
+        deliveryStreet:
+          type: string
+          example: "10880 Malibu Point"
+        deliveryCity:
+          type: string
+          example: "Malibu"
+        paymentToken:
+          type: string
+          example: "tok_visa_123"
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              quantity:
+                type: integer
+                example: 2
+              taco:
+                type: object
+                description: Definición del taco
+
+    OrderSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "645b2e9f8a3c"
+        placedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          example: "NEW"
+        total:
+          type: number
+          format: float
+          example: 15.50
+
+    ApiProblem:
+      type: object
+      description: RFC 7807 Problem Details for HTTP APIs
+      properties:
+        type:
+          type: string
+          example: "https://tacocloud.com/errors/http-error"
+        title:
+          type: string
+          example: "Bad Request"
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: "Stock insuficiente para FLTO"
+        instance:
+          type: string
+          example: "/api/v1/orders"

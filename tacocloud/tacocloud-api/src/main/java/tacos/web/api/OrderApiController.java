@@ -27,7 +27,7 @@ import javax.validation.Valid;
 import java.math.BigDecimal;
 
 @RestController
-@RequestMapping(path="/api", produces="application/json")
+@RequestMapping(path={"/api/v1", "/api"}, produces="application/json")
 @CrossOrigin(origins="http://localhost:8080")
 public class OrderApiController {
 

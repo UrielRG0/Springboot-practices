@@ -9,7 +9,7 @@ import reactor.core.publisher.Mono;
 import tacos.data.UserRepository;
 
 @RestController
-@RequestMapping(path = "/register", produces = "application/json")
+@RequestMapping(path = {"/api/v1/register","/register"}, produces = "application/json")
 public class RegistrationController {
   
   private UserRepository userRepo;
