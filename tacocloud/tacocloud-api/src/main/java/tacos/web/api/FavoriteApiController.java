@@ -18,7 +18,7 @@ import tacos.data.TacoRepository;
 import java.util.Date;
 
 @RestController
-@RequestMapping(path = "/api/users/me/favorites", produces = "application/json")
+@RequestMapping(path = {"/api/v1/users/me/favorites","/api/users/me/favorites"}, produces = "application/json")
 @CrossOrigin(origins = "*")
 public class FavoriteApiController {
 

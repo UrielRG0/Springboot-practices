@@ -10,7 +10,7 @@ import tacos.validation.ValidationViolation;
 import java.util.List;
 
 @RestController
-@RequestMapping(path = "/api/tacos", produces = "application/json")
+@RequestMapping(path = {"/api/v1/tacos","/api/tacos"}, produces = "application/json")
 @CrossOrigin(origins = "http://localhost:8080")
 public class TacoValidationController {
 

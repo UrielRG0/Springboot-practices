@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping(path = "/api/coupons", produces = "application/json")
+@RequestMapping(path = {"/api/v1/coupons","/api/coupons"}, produces = "application/json")
 @CrossOrigin(origins = "http://localhost:8080")
 public class CouponController {
 

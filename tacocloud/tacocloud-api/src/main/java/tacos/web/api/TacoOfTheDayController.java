@@ -8,7 +8,7 @@ import reactor.core.publisher.Mono;
 import tacos.web.api.TacoOfTheDayService;
 
 @RestController
-@RequestMapping(path = "/api/tacos", produces = "application/json")
+@RequestMapping(path = {"/api/v1/tacos","/api/tacos"}, produces = "application/json")
 public class TacoOfTheDayController {
 
     private final TacoOfTheDayService tacoOfTheDayService;

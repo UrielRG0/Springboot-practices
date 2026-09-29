@@ -12,7 +12,7 @@ import tacos.api.dto.StockAdjustmentRequest;
 import javax.validation.Valid;
 
 @RestController
-@RequestMapping(path = "/api/admin/ingredients", produces = "application/json")
+@RequestMapping(path = {"/api/v1/admin/ingredients","/api/admin/ingredients"}, produces = "application/json")
 @CrossOrigin(origins = "http://localhost:8080")
 public class AdminIngredientController {
 
