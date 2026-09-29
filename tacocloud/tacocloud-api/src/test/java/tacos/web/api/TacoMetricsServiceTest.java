@@ -53,7 +53,7 @@ public class TacoMetricsServiceTest {
 
     @Test
     public void testRecordPlacementTime_RecordsTimer() {
-        metricsService.recordPlacementTime(250);
+        metricsService.recordPlacementTime(250); 
 
         long count = registry.timer("tacocloud.orders.placement.time").count();
         assertThat(count).isEqualTo(1L);
