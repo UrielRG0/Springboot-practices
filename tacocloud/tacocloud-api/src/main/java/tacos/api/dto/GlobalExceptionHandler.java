@@ -26,7 +26,7 @@ public class GlobalExceptionHandler {
             .title("Error data validation")
             .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
             .detail("The request contains invalid or incomplete data.")
-            .instance(request.getRequestURI()) // Extrae la URL modo MVC
+            .instance(request.getRequestURI()) 
             .code("ERR_VALIDATION_422")
             .violations(violations)
             .build();
@@ -42,7 +42,7 @@ public class GlobalExceptionHandler {
             .title(ex.getStatus().getReasonPhrase())
             .status(ex.getStatus().value())
             .detail(ex.getReason() != null ? ex.getReason() : "Operation not allowed or resource not found")
-            .instance(request.getRequestURI()) // Extrae la URL modo MVC
+            .instance(request.getRequestURI()) 
             .code("ERR_HTTP_" + ex.getStatus().value())
             .build();
 
@@ -57,7 +57,7 @@ public class GlobalExceptionHandler {
             .title("Internal Server Error")
             .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
             .detail("An unexpected error occurred on the server. Please try again later.")
-            .instance(request.getRequestURI()) // Extrae la URL modo MVC
+            .instance(request.getRequestURI()) 
             .code("ERR_INTERNAL_500")
             .build();
 
