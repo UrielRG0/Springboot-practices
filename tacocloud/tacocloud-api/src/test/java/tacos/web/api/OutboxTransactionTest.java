@@ -21,6 +21,7 @@ import tacos.data.MongoTransactionConfig;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import tacos.outbox.OutboxPublisher;
@@ -75,7 +76,7 @@ public class OutboxTransactionTest {
         order.setDeliveryName("Bruce Wayne");
         order.setDeliveryCity("Gotham");
 
-        TacoOrder savedOrder = placementService.placeOrderTransactionally(order).block(Duration.ofSeconds(5));
+        TacoOrder savedOrder = placementService.placeOrderTransactionally(order, null, "test-user").block(Duration.ofSeconds(5));
 
         assertThat(savedOrder).isNotNull();
         assertThat(savedOrder.getId()).isNotNull();

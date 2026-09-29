@@ -28,8 +28,9 @@ public class OrderOwnershipTest {
         OrderPricingService pricingMock = mock(OrderPricingService.class);
         InventoryService inventoryMock = mock(InventoryService.class);
         tacos.OrderWorkflowService workflowMock = org.mockito.Mockito.mock(tacos.OrderWorkflowService.class);
+        tacos.core.OrderPlacementService placementMock = org.mockito.Mockito.mock(tacos.core.OrderPlacementService.class);
         
-        OrderApiController controller = new OrderApiController(repoMock, messagingMock, emailMock, paymentMock, pricingMock, inventoryMock, workflowMock);
+        OrderApiController controller = new OrderApiController(repoMock, messagingMock, emailMock, paymentMock, pricingMock, inventoryMock, workflowMock, placementMock);
         
         User userA = new User("userA", "pass", "A", "A", "A", "A", "A", "A", "a@a.com", "ROLE_USER");
         userA.setId("ID_USER_A"); 
