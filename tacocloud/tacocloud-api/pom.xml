@@ -12,7 +12,7 @@
 
     <parent>
         <groupId>sia</groupId>
-    <artifactId>taco-cloud-parent</artifactId>
+        <artifactId>taco-cloud-parent</artifactId>
         <version>0.0.17-SNAPSHOT</version>
     </parent>
 
@@ -21,18 +21,6 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>11</java.version>
     </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.testcontainers</groupId>
-                <artifactId>testcontainers-bom</artifactId>
-                <version>1.20.1</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <!-- TacoCloud dependencies -->
@@ -62,21 +50,6 @@
             <artifactId>tacocloud-kitchen</artifactId>
             <version>${tacocloud.version}</version>
         </dependency>
-<!--        <dependency>
-            <groupId>sia</groupId>
-            <artifactId>tacocloud-messaging-jms</artifactId>
-            <version>${tacocloud.version}</version>
-        </dependency> -->
-        <!-- <dependency>
-            <groupId>sia</groupId>
-            <artifactId>tacocloud-messaging-rabbitmq</artifactId>
-            <version>${tacocloud.version}</version>
-        </dependency> -->
-<!--        <dependency>
-            <groupId>sia</groupId>
-            <artifactId>tacocloud-messaging-kafka</artifactId>
-            <version>${tacocloud.version}</version>
-        </dependency> -->
 
         <!-- Necessary Boot starters -->
         <dependency>
@@ -101,11 +74,6 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-
-        <!-- <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-artemis</artifactId>
-        </dependency> -->
         
         <!--Reactor Test-->
         <dependency>
@@ -124,39 +92,6 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>mongodb</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>rabbitmq</artifactId>
-            <scope>test</scope>
-        </dependency>
-
     </dependencies>
-
-	<!-- ESTE BLOQUE HACKEA LA VERSIÓN DE DOCKER PARA QUE PASE EL TEST -->
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.22.2</version>
-                <configuration>
-                    <environmentVariables>
-                        <DOCKER_API_VERSION>1.41</DOCKER_API_VERSION>
-                    </environmentVariables>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>
